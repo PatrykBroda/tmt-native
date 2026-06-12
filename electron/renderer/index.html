@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self'; media-src 'self' blob:;" />
+  <title>TMT Native</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Frameless drag region -->
+  <div class="titlebar">
+    TMT NATIVE
+    <button id="broadcast-btn" class="titlebar-sc-btn" title="Toggle Broadcast Center">SC</button>
+    <button class="close-btn" id="close-btn" title="Close"></button>
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       LOGIN
+  ══════════════════════════════════════════════════════ -->
+  <div class="screen active" id="login-screen">
+
+    <div class="brand">
+      <img src="../assets/tmt-logo.svg" alt="TMT" class="brand-logo-img" />
+      <p class="brand-sub">Streaming Studio</p>
+    </div>
+
+    <form class="form" id="login-form" autocomplete="off">
+      <div class="field">
+        <label for="username">Username</label>
+        <input type="text"     id="username" name="username"
+               placeholder="your username" autocomplete="username" />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password"
+               placeholder="••••••••" autocomplete="current-password" />
+      </div>
+      <p class="error-msg" id="login-error"></p>
+      <button type="submit" class="btn btn-primary" id="login-btn">Sign in</button>
+    </form>
+
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       DASHBOARD
+  ══════════════════════════════════════════════════════ -->
+  <div class="screen" id="dashboard-screen">
+
+    <!-- Header -->
+    <div class="dash-header">
+      <span class="dash-brand">TMT</span>
+      <div class="dash-header-right">
+        <div class="obs-badge">
+          <div class="obs-dot" id="obs-dot"></div>
+          <span id="obs-label">OBS</span>
+        </div>
+        <button class="btn btn-icon" id="debug-btn" title="Debug panel (Ctrl+D)">&#62;_</button>
+        <button class="btn btn-icon" id="settings-btn" title="Stream platforms">&#9881;</button>
+        <button class="btn btn-ghost" id="logout-btn">Log out</button>
+      </div>
+    </div>
+
+    <!-- Main: camera + chat + platform toggles -->
+    <div class="dash-main">
+
+      <!-- Camera preview -->
+      <div class="camera-col">
+        <div class="camera-wrap">
+          <video id="camera-preview" autoplay muted playsinline></video>
+          <div class="camera-placeholder" id="camera-placeholder">
+            <span>&#9679;&nbsp; NO CAMERA</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Platform toggles sidebar -->
+      <div class="platform-sidebar" id="platform-sidebar">
+        <!-- populated by JS -->
+      </div>
+
+      <!-- Chat -->
+      <div class="chat-col">
+        <div class="viewer-bar">
+          <span class="viewer-icon">&#128065;</span>
+          <span id="viewer-count" class="viewer-count">—</span>
+          <span class="viewer-label">viewers</span>
+        </div>
+        <div class="chat-messages" id="chat-messages">
+          <div class="chat-empty" id="chat-empty">
+            Add your Events API token in Settings to see live chat.
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Footer: GO LIVE + stats -->
+    <div class="dash-footer">
+      <div class="footer-live">
+        <button class="btn-live" id="go-live-btn" disabled>GO LIVE</button>
+        <p class="btn-live-status" id="live-status">Waiting for OBS</p>
+      </div>
+      <div class="footer-controls">
+        <button class="btn-control" id="mute-btn" title="Toggle microphone (M)">
+          <span class="control-icon" id="mute-icon">&#9679;</span>
+          <span class="control-label" id="mute-label">MIC</span>
+        </button>
+        <button class="btn-control" id="cam-btn" title="Toggle camera (V)">
+          <span class="control-icon" id="cam-icon">&#9679;</span>
+          <span class="control-label" id="cam-label">CAM</span>
+        </button>
+      </div>
+      <div class="footer-stats">
+        <div class="stat-card">
+          <div class="stat-value" id="stat-bitrate">—</div>
+          <div class="stat-label">kbps</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-dropped">—</div>
+          <div class="stat-label">Dropped</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-value" id="stat-cpu">—</div>
+          <div class="stat-label">CPU %</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       SETTINGS
+  ══════════════════════════════════════════════════════ -->
+  <div class="screen" id="settings-screen">
+
+    <div class="settings-header">
+      <button class="btn btn-icon" id="settings-back-btn" title="Back">&#8592;</button>
+      <span class="settings-title">STREAM PLATFORMS</span>
+    </div>
+
+    <div class="platform-list" id="platform-list">
+      <!-- populated by JS -->
+    </div>
+
+    <div class="settings-footer">
+      <span id="settings-version" class="settings-ver-text">—</span>
+      <button class="btn btn-ghost" id="check-updates-btn">Check for updates</button>
+    </div>
+
+  </div>
+
+  <!-- ══════════════════════════════════════════════════════
+       DEBUG PANEL
+  ══════════════════════════════════════════════════════ -->
+  <div id="debug-overlay" class="debug-overlay">
+    <div class="debug-panel">
+      <div class="debug-panel-header">
+        <span class="debug-panel-title">&gt;_ DEBUG</span>
+        <div class="debug-panel-actions">
+          <button class="btn btn-ghost btn-debug-copy" id="debug-copy-btn">Copy</button>
+          <button class="btn btn-icon btn-debug-close" id="debug-close-btn">&#215;</button>
+        </div>
+      </div>
+      <div class="debug-body" id="debug-body">
+        <pre class="debug-pre" id="debug-pre">Loading…</pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stripchat manual-start modal -->
+  <div id="sc-manual-overlay" class="sc-modal-overlay">
+    <div class="sc-modal">
+      <div class="sc-modal-header">
+        <span class="sc-modal-title">Manual Start Required</span>
+        <button class="btn btn-icon sc-modal-close" id="sc-modal-close">&#215;</button>
+      </div>
+      <div class="sc-modal-body">
+        <p class="sc-modal-msg">
+          OBS is streaming but the app couldn&rsquo;t automatically click
+          <strong>&ldquo;Start Show&rdquo;</strong> on Stripchat — the button
+          may have moved or the broadcast view wasn&rsquo;t loaded yet.
+        </p>
+        <p class="sc-modal-hint">
+          Click the button below to open Stripchat in your browser (where
+          you&rsquo;re already logged in) and start the show manually.
+        </p>
+      </div>
+      <div class="sc-modal-footer">
+        <button class="btn btn-ghost sc-modal-dismiss" id="sc-modal-dismiss">Dismiss</button>
+        <button class="btn btn-primary sc-modal-open" id="sc-modal-open">Open Stripchat &rarr;</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

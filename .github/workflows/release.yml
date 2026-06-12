@@ -1,0 +1,166 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version (e.g. 1.1.0) — must match package.json'
+        required: true
+
+jobs:
+  # ── Windows installer ──────────────────────────────────────────────────────────
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: electron
+
+      - name: Cache OBS Windows bundle
+        id: cache-obs-win
+        uses: actions/cache@v4
+        with:
+          path: electron/obs
+          key: obs-windows-31.0.3-multirtmp-0.5.1
+
+      - name: Download & configure OBS (Windows)
+        if: steps.cache-obs-win.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          $OBS_VERSION    = "31.0.3"
+          $PLUGIN_VERSION = "0.5.1"
+
+          # Download OBS portable ZIP
+          $obsUrl = "https://github.com/obsproject/obs-studio/releases/download/$OBS_VERSION/OBS-Studio-$OBS_VERSION-Windows.zip"
+          Write-Host "Downloading OBS $OBS_VERSION..."
+          Invoke-WebRequest -Uri $obsUrl -OutFile obs-win.zip -TimeoutSec 300
+          Expand-Archive -Path obs-win.zip -DestinationPath obs-extracted
+
+          # Move OBS files into electron/obs/
+          $src = (Get-ChildItem obs-extracted -Directory | Select-Object -First 1).FullName
+          New-Item -ItemType Directory -Force -Path electron/obs | Out-Null
+          Copy-Item "$src\*" electron/obs -Recurse -Force
+          Remove-Item obs-extracted, obs-win.zip -Recurse -Force
+
+          # Download obs-multi-rtmp plugin
+          $pluginUrl = "https://github.com/sorayuki/obs-multi-rtmp/releases/download/$PLUGIN_VERSION/obs-multi-rtmp-$PLUGIN_VERSION-windows.zip"
+          Write-Host "Downloading obs-multi-rtmp $PLUGIN_VERSION..."
+          Invoke-WebRequest -Uri $pluginUrl -OutFile plugin.zip -TimeoutSec 120
+          Expand-Archive -Path plugin.zip -DestinationPath plugin-extracted
+
+          # Copy plugin into OBS
+          $pluginSrc = "plugin-extracted"
+          if (Test-Path "$pluginSrc\obs-plugins") {
+            Copy-Item "$pluginSrc\obs-plugins\*" electron/obs/obs-plugins -Recurse -Force
+          } elseif (Test-Path "$pluginSrc\64bit") {
+            Copy-Item "$pluginSrc\64bit\*" electron/obs/obs-plugins/64bit -Recurse -Force
+          } else {
+            Get-ChildItem $pluginSrc -Recurse -Filter "*.dll" | ForEach-Object {
+              Copy-Item $_.FullName electron/obs/obs-plugins/64bit/ -Force
+            }
+          }
+          Remove-Item plugin-extracted, plugin.zip -Recurse -Force
+          Write-Host "OBS setup complete."
+
+      - name: Build Windows installer
+        run: node scripts/build-release.js
+        working-directory: electron
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload to dashboard
+        run: node scripts/upload-release.js
+        working-directory: electron
+        env:
+          DASHBOARD_USER: ${{ secrets.DASHBOARD_USER }}
+          DASHBOARD_PASS: ${{ secrets.DASHBOARD_PASS }}
+
+      - name: Save installer as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: electron/dist/TMT-Streaming-Setup-*.exe
+          retention-days: 30
+
+  # ── macOS DMG ──────────────────────────────────────────────────────────────────
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Install dependencies
+        run: npm install
+        working-directory: electron
+
+      - name: Cache OBS macOS bundle
+        id: cache-obs-mac
+        uses: actions/cache@v4
+        with:
+          path: electron/obs
+          key: obs-macos-31.0.3-multirtmp-0.5.1
+
+      - name: Download & configure OBS (macOS)
+        if: steps.cache-obs-mac.outputs.cache-hit != 'true'
+        run: |
+          OBS_VERSION="31.0.3"
+          PLUGIN_VERSION="0.5.1"
+
+          echo "Downloading OBS $OBS_VERSION for macOS..."
+          curl -L -o obs-mac.dmg "https://github.com/obsproject/obs-studio/releases/download/$OBS_VERSION/obs-studio-$OBS_VERSION-macos-apple.dmg" --max-time 300
+
+          hdiutil attach obs-mac.dmg -mountpoint /Volumes/OBS -nobrowse -quiet
+          mkdir -p electron/obs
+          cp -R "/Volumes/OBS/OBS.app" electron/obs/
+          hdiutil detach /Volumes/OBS -quiet
+          rm obs-mac.dmg
+
+          # obs-multi-rtmp macOS build (if available)
+          PLUGIN_URL="https://github.com/sorayuki/obs-multi-rtmp/releases/download/$PLUGIN_VERSION/obs-multi-rtmp-$PLUGIN_VERSION-macos.pkg"
+          echo "Downloading obs-multi-rtmp for macOS..."
+          if curl -L -o plugin.pkg "$PLUGIN_URL" --max-time 60 --fail 2>/dev/null; then
+            pkgutil --expand plugin.pkg plugin-expanded
+            find plugin-expanded -name "*.dylib" -o -name "*.so" | while read f; do
+              cp "$f" "electron/obs/OBS.app/Contents/obs-plugins/" 2>/dev/null || true
+            done
+            rm -rf plugin-expanded plugin.pkg
+          else
+            echo "obs-multi-rtmp macOS build not available — skipping plugin"
+          fi
+          echo "OBS macOS setup complete."
+
+      - name: Build macOS DMG
+        run: node scripts/build-release.js --mac
+        working-directory: electron
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload to dashboard
+        run: node scripts/upload-release.js --platform macos
+        working-directory: electron
+        env:
+          DASHBOARD_USER: ${{ secrets.DASHBOARD_USER }}
+          DASHBOARD_PASS: ${{ secrets.DASHBOARD_PASS }}
+
+      - name: Save DMG as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: electron/dist/TMT-Streaming-Setup-*.dmg
+          retention-days: 30

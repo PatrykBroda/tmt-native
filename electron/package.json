@@ -1,0 +1,68 @@
+{
+  "name": "tmt-native",
+  "version": "1.0.0",
+  "description": "TMT branded streaming desktop app",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build": "electron-builder --win --publish never",
+    "deploy": "node scripts/deploy.js",
+    "release": "node scripts/build-release.js"
+  },
+  "dependencies": {
+    "obs-websocket-js": "^5.0.3",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "playwright-core": "^1.60.0"
+  },
+  "build": {
+    "appId": "com.agencytmt.native",
+    "productName": "TMT Native",
+    "artifactName": "TMT-Streaming-Setup-${version}.${ext}",
+    "win": {
+      "target": ["nsis"],
+      "icon": "assets/icon.ico",
+      "signAndEditExecutable": false,
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TMT Native"
+    },
+    "mac": {
+      "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }],
+      "icon": "assets/icon.png",
+      "artifactName": "TMT-Streaming-Setup-${version}.${ext}"
+    },
+    "linux": {
+      "target": ["AppImage"],
+      "icon": "assets/icon.png",
+      "artifactName": "TMT-Streaming-Setup-${version}.${ext}"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "obs-manager.js",
+      "renderer/**/*",
+      "assets/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "obs",
+        "to": "obs",
+        "filter": [
+          "**/*",
+          "!SETUP.txt"
+        ]
+      }
+    ],
+    "publish": null
+  }
+}

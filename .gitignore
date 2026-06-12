@@ -1,0 +1,14 @@
+node_modules/
+dist/
+electron/dist/
+electron/obs/
+electron/assets/icon.png
+electron/assets/icon.ico
+electron/scripts/upload-screenshot.png
+*.log
+*.enc
+cookies.txt
+.env
+.claude/
+backend/.env
+electron/test-shots/
