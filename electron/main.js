@@ -21,7 +21,7 @@ let streamDestinations = [];
 let lastTotalBytes     = 0;
 let lastPollTime       = Date.now();
 let scView             = null;
-let scViewVisible      = true;
+let scViewVisible      = false;
 const TITLEBAR_H       = 30;
 let disabledDestIds    = new Set(); // ids of destinations turned off by the user
 
@@ -964,6 +964,7 @@ function createBroadcastView() {
     },
   });
   mainWindow.contentView.addChildView(scView);
+  scView.setVisible(false);
   scView.webContents.loadURL('https://stripchat.com/broadcast');
 
   function updateBounds() {
@@ -971,8 +972,8 @@ function createBroadcastView() {
     const [w, h] = mainWindow.getSize();
     scView.setBounds({ x: 0, y: TITLEBAR_H, width: w, height: h - TITLEBAR_H });
   }
+  updateBounds();
   mainWindow.on('resize', updateBounds);
-  mainWindow.once('maximize', updateBounds);
 }
 
 async function clickStripchatButton(pattern, timeoutMs = 15000) {
