@@ -58,21 +58,28 @@ jobs:
           $asset   = $release.assets | Where-Object { $_.name -match "windows|win" } | Select-Object -First 1
           if (-not $asset) { $asset = $release.assets | Select-Object -First 1 }
           Write-Host "Downloading obs-multi-rtmp $($release.tag_name) — $($asset.name)..."
-          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile plugin.zip -TimeoutSec 120
-          Expand-Archive -Path plugin.zip -DestinationPath plugin-extracted
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile plugin-installer -TimeoutSec 120
 
-          # Copy plugin DLLs into OBS — handle any folder layout
-          $pluginSrc = "plugin-extracted"
-          if (Test-Path "$pluginSrc\obs-plugins") {
-            Copy-Item "$pluginSrc\obs-plugins\*" electron/obs/obs-plugins -Recurse -Force
-          } elseif (Test-Path "$pluginSrc\64bit") {
-            Copy-Item "$pluginSrc\64bit\*" electron/obs/obs-plugins/64bit -Recurse -Force
+          # Extract with 7-Zip (handles both .zip and NSIS .exe — 7z is pre-installed on windows-latest)
+          New-Item -ItemType Directory -Force -Path plugin-extracted | Out-Null
+          7z x plugin-installer -oplugin-extracted -y | Out-Null
+
+          # Copy plugin DLLs + data into OBS — handle any extraction layout
+          New-Item -ItemType Directory -Force -Path electron/obs/obs-plugins/64bit | Out-Null
+          if (Test-Path "plugin-extracted\obs-plugins") {
+            Copy-Item "plugin-extracted\obs-plugins\*" electron/obs/obs-plugins -Recurse -Force
+          } elseif (Test-Path "plugin-extracted\64bit") {
+            Copy-Item "plugin-extracted\64bit\*" electron/obs/obs-plugins/64bit -Recurse -Force
           } else {
-            Get-ChildItem $pluginSrc -Recurse -Filter "*.dll" | ForEach-Object {
+            Get-ChildItem plugin-extracted -Recurse -Filter "*.dll" | ForEach-Object {
               Copy-Item $_.FullName electron/obs/obs-plugins/64bit/ -Force
             }
           }
-          Remove-Item plugin-extracted, plugin.zip -Recurse -Force
+          if (Test-Path "plugin-extracted\data\obs-plugins") {
+            New-Item -ItemType Directory -Force -Path electron/obs/data/obs-plugins | Out-Null
+            Copy-Item "plugin-extracted\data\obs-plugins\*" electron/obs/data/obs-plugins -Recurse -Force
+          }
+          Remove-Item plugin-extracted, plugin-installer -Recurse -Force
           Write-Host "OBS setup complete."
 
       - name: Build Windows installer
