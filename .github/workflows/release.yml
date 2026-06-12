@@ -129,10 +129,15 @@ jobs:
         if: steps.cache-obs-mac.outputs.cache-hit != 'true'
         run: |
           OBS_VERSION="31.0.3"
-          PLUGIN_VERSION="0.5.1"
+          ARCH=$(uname -m)  # arm64 on Apple Silicon, x86_64 on Intel
+          if [ "$ARCH" = "arm64" ]; then
+            OBS_DMG="obs-studio-$OBS_VERSION-macos-apple.dmg"
+          else
+            OBS_DMG="obs-studio-$OBS_VERSION-macos-x86_64.dmg"
+          fi
 
-          echo "Downloading OBS $OBS_VERSION for macOS..."
-          curl -L -o obs-mac.dmg "https://github.com/obsproject/obs-studio/releases/download/$OBS_VERSION/obs-studio-$OBS_VERSION-macos-apple.dmg" --max-time 300
+          echo "Downloading OBS $OBS_VERSION for macOS ($ARCH)..."
+          curl -L -o obs-mac.dmg "https://github.com/obsproject/obs-studio/releases/download/$OBS_VERSION/$OBS_DMG" --max-time 300
 
           hdiutil attach obs-mac.dmg -mountpoint /Volumes/OBS -nobrowse -quiet
           mkdir -p electron/obs
