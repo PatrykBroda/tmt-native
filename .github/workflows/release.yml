@@ -38,8 +38,7 @@ jobs:
         if: steps.cache-obs-win.outputs.cache-hit != 'true'
         shell: pwsh
         run: |
-          $OBS_VERSION    = "31.0.3"
-          $PLUGIN_VERSION = "0.5.1"
+          $OBS_VERSION = "31.0.3"
 
           # Download OBS portable ZIP
           $obsUrl = "https://github.com/obsproject/obs-studio/releases/download/$OBS_VERSION/OBS-Studio-$OBS_VERSION-Windows.zip"
@@ -53,13 +52,16 @@ jobs:
           Copy-Item "$src\*" electron/obs -Recurse -Force
           Remove-Item obs-extracted, obs-win.zip -Recurse -Force
 
-          # Download obs-multi-rtmp plugin
-          $pluginUrl = "https://github.com/sorayuki/obs-multi-rtmp/releases/download/$PLUGIN_VERSION/obs-multi-rtmp-$PLUGIN_VERSION-windows.zip"
-          Write-Host "Downloading obs-multi-rtmp $PLUGIN_VERSION..."
-          Invoke-WebRequest -Uri $pluginUrl -OutFile plugin.zip -TimeoutSec 120
+          # Download obs-multi-rtmp (latest release, resolve asset URL via API)
+          Write-Host "Fetching obs-multi-rtmp latest release..."
+          $release = Invoke-RestMethod "https://api.github.com/repos/sorayuki/obs-multi-rtmp/releases/latest"
+          $asset   = $release.assets | Where-Object { $_.name -match "windows|win" } | Select-Object -First 1
+          if (-not $asset) { $asset = $release.assets | Select-Object -First 1 }
+          Write-Host "Downloading obs-multi-rtmp $($release.tag_name) — $($asset.name)..."
+          Invoke-WebRequest -Uri $asset.browser_download_url -OutFile plugin.zip -TimeoutSec 120
           Expand-Archive -Path plugin.zip -DestinationPath plugin-extracted
 
-          # Copy plugin into OBS
+          # Copy plugin DLLs into OBS — handle any folder layout
           $pluginSrc = "plugin-extracted"
           if (Test-Path "$pluginSrc\obs-plugins") {
             Copy-Item "$pluginSrc\obs-plugins\*" electron/obs/obs-plugins -Recurse -Force
