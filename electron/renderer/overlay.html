@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>TMT Chat Overlay</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: transparent;
+    font-family: 'Segoe UI', Arial, sans-serif;
+    font-size: 15px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    height: 100vh;
+    padding: 10px;
+    overflow: hidden;
+    color: #fff;
+  }
+
+  #feed {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    overflow: hidden;
+  }
+
+  .msg {
+    display: flex;
+    align-items: baseline;
+    gap: 5px;
+    background: rgba(0,0,0,0.65);
+    border-radius: 5px;
+    padding: 4px 9px;
+    animation: slideIn .18s ease;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .msg.chat   { border-left: 3px solid #b388ff; }
+  .msg.tip    { border-left: 3px solid #ffd54f; background: rgba(255,213,79,.18); }
+  .msg.follow { border-left: 3px solid #69f0ae; background: rgba(105,240,174,.15); }
+  .msg.system { border-left: 3px solid #546e7a; font-size: 12px; opacity: .7; }
+
+  .platform {
+    font-size: 10px;
+    opacity: .45;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .username {
+    font-weight: 700;
+    flex-shrink: 0;
+    color: #b388ff;
+  }
+  .msg.tip    .username { color: #ffd54f; }
+  .msg.follow .username { color: #69f0ae; }
+  .text { flex: 1; }
+
+  #status {
+    font-size: 11px;
+    color: rgba(255,255,255,.3);
+    text-align: center;
+    padding: 3px 0 0;
+    height: 16px;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="feed"></div>
+<div id="status">Connecting to TMT Native…</div>
+
+<script>
+const WS_URL      = 'ws://localhost:8765';
+const MAX_VISIBLE = 18;
+
+const feed     = document.getElementById('feed');
+const statusEl = document.getElementById('status');
+
+function addMessage(e) {
+  const type = e.type || 'chat';
+  const div  = document.createElement('div');
+  div.className = 'msg ' + type;
+
+  if (e.platform) {
+    const p = document.createElement('span');
+    p.className = 'platform';
+    p.textContent = '[' + e.platform + ']';
+    div.appendChild(p);
+  }
+
+  const user = e.username || e.user || '';
+  if (user) {
+    const u = document.createElement('span');
+    u.className = 'username';
+    u.textContent = user + ':';
+    div.appendChild(u);
+  }
+
+  const t = document.createElement('span');
+  t.className = 'text';
+  t.textContent = e.text || e.msg || '';
+  div.appendChild(t);
+
+  feed.appendChild(div);
+  while (feed.children.length > MAX_VISIBLE) feed.removeChild(feed.firstChild);
+}
+
+function connect() {
+  const ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => { statusEl.textContent = ''; };
+
+  ws.onclose = () => {
+    statusEl.textContent = 'Reconnecting…';
+    setTimeout(connect, 3000);
+  };
+
+  ws.onerror = () => {};   // onclose fires after this
+
+  ws.onmessage = ({ data }) => {
+    try {
+      const e = JSON.parse(data);
+      if (e.type === 'connected') return;   // handshake
+      addMessage(e);
+    } catch {}
+  };
+}
+
+connect();
+</script>
+</body>
+</html>

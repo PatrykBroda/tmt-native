@@ -148,43 +148,11 @@ function writeProfileIni(configDir, primaryPlatform) {
   const preset  = PLATFORM_PRESETS[primaryPlatform?.toLowerCase()] || DEFAULT_PRESET;
   const encoder = detectStreamEncoder();
 
-  // Simple Output mode uses short aliases; advanced IDs are silently ignored and fall back to x264.
-  const simpleEncoder = {
-    'obs_nvenc_h264_tex': 'nvenc',
-    'h264_texture_amf':   'amd',
-    'obs_qsv11_v2':       'qsv_h264',
-    'obs_x264':           'x264',
-  }[encoder] || 'x264';
+  console.log('[obs-manager] platform=%s encoder=%s bitrate=%s bframes=%s', primaryPlatform || 'default', encoder, preset.vBitrate, preset.bFrames);
 
-  console.log('[obs-manager] platform=%s encoder=%s simple=%s bitrate=%s', primaryPlatform || 'default', encoder, simpleEncoder, preset.vBitrate);
-
-  // Build encoder-specific extras — each GPU brand has its own ini keys.
-  // Keys not recognised by OBS in simple mode are silently ignored (safe to include).
-  let encoderExtras = '';
-  switch (encoder) {
-    case 'obs_nvenc_h264_tex':                        // NVIDIA NVENC
-      // NVENCTuning=ll (low latency) disables lookahead so bf=0 is respected.
-      // With hq tuning, NVENC SDK forces bf>=2 when lookahead is on.
-      encoderExtras =
-        `NVENCPreset2=${preset.nvencPreset || 'p5'}\n` +
-        `NVENCTuning=${preset.nvencTuning || 'hq'}\n` +
-        `NVENCMultipass=${preset.nvencMultipass || 'qres'}\n` +
-        `NVENCBFrames=${preset.bFrames}\n` +
-        `NVENCProfile=${preset.profile}\n`;
-      break;
-    case 'h264_texture_amf':                          // AMD AMF
-      encoderExtras =
-        `AMFBFrames=${preset.bFrames}\n` +
-        `AMFProfile=${preset.profile}\n`;
-      break;
-    case 'obs_qsv11_v2':                              // Intel QSV (B-frames off by default)
-      encoderExtras = `QSVProfile=${preset.profile}\n`;
-      break;
-    case 'obs_x264':                                  // CPU x264 fallback
-      if (preset.x264Opts) encoderExtras = `x264Settings=${preset.x264Opts}\n`;
-      break;
-  }
-
+  // Advanced output mode — the only mode where OBS honours b-frames, tuning,
+  // and other encoder-specific settings (Simple mode silently ignores them).
+  // Encoder settings live in streamEncoder.json (written separately below).
   const ini = `[General]
 Name=TMT
 AutoConfigWizardWasRun=true
@@ -205,14 +173,20 @@ ColorSpace=sRGB
 ColorRange=Partial
 
 [Output]
-Mode=Simple
+Mode=Advanced
 
-[SimpleOutput]
-VBitrate=${preset.vBitrate}
+[AdvOut]
+TrackIndex=1
+Encoder=${encoder}
 ABitrate=${preset.aBitrate}
-StreamEncoder=${simpleEncoder}
-${encoderExtras}RecFormat=mkv
-UseAdvanced=false
+RecFormat=mkv
+RescaleOutput=false
+AudioTrack1=true
+AudioTrack2=false
+AudioTrack3=false
+AudioTrack4=false
+AudioTrack5=false
+AudioTrack6=false
 
 [Audio]
 SampleRate=48000
@@ -229,15 +203,75 @@ BindIP=default
 EnableMultitrackVideo=false
 `;
   fs.writeFileSync(path.join(profileDir, 'basic.ini'), ini);
+  writeStreamEncoderJson(profileDir, encoder, preset);
+}
+
+// Write streamEncoder.json — OBS Advanced mode reads this for all encoder settings.
+// This is the only reliable way to control b-frames, tuning, and multipass.
+function writeStreamEncoderJson(profileDir, encoder, preset) {
+  let settings;
+  switch (encoder) {
+    case 'obs_nvenc_h264_tex':
+      settings = {
+        bitrate:      preset.vBitrate,
+        rate_control: 'CBR',
+        keyint_sec:   2,
+        preset2:      preset.nvencPreset  || 'p5',
+        tune:         preset.nvencTuning  || 'hq',
+        bf:           preset.bFrames      ?? 2,
+        profile:      preset.profile      || 'high',
+        // lookahead forces bf>=2 in NVENC regardless of bf=0; disable when ll tuning.
+        lookahead:    preset.nvencTuning === 'll' ? false : true,
+        psycho_aq:    preset.nvencTuning === 'll' ? false : true,
+        multipass:    preset.nvencMultipass || 'qres',
+      };
+      break;
+    case 'h264_texture_amf':
+      settings = {
+        bitrate:      preset.vBitrate,
+        rate_control: 'CBR',
+        keyint_sec:   2,
+        bf:           preset.bFrames ?? 2,
+        profile:      preset.profile  || 'high',
+      };
+      break;
+    case 'obs_qsv11_v2':
+      settings = {
+        target_bitrate: preset.vBitrate,
+        rate_control:   'CBR',
+        keyint_sec:     2,
+        profile:        preset.profile || 'high',
+      };
+      break;
+    case 'obs_x264':
+    default:
+      settings = {
+        bitrate:      preset.vBitrate,
+        rate_control: 'CBR',
+        keyint_sec:   2,
+        preset:       'veryfast',
+        tune:         preset.x264Opts?.includes('zerolatency') ? 'zerolatency' : '',
+        x264opts:     preset.x264Opts || '',
+        profile:      preset.profile  || 'high',
+      };
+      break;
+  }
+  fs.writeFileSync(path.join(profileDir, 'streamEncoder.json'), JSON.stringify(settings, null, 2));
 }
 
 function writeSceneCollection(configDir) {
   const scenesDir = path.join(configDir, 'basic', 'scenes');
   fs.mkdirSync(scenesDir, { recursive: true });
 
-  // Minimal valid scene collection — one blank scene.
-  // Sources (camera, screen capture) are added by the model directly in OBS if needed,
-  // but the stream destinations are driven entirely by obs-multi-rtmp.
+  // Don't overwrite if the model already has sources set up (camera, screen capture, etc.).
+  // We only write the blank starter collection on first install.
+  const sceneFile = path.join(scenesDir, 'TMT.json');
+  try {
+    const existing = JSON.parse(fs.readFileSync(sceneFile, 'utf8'));
+    const hasItems = existing.sources?.some(s => (s.settings?.items?.length ?? 0) > 0);
+    if (hasItems) return;
+  } catch {}
+
   const collection = {
     current_program_scene: 'Scene',
     current_scene: 'Scene',
@@ -279,10 +313,7 @@ function writeSceneCollection(configDir) {
     version: 1,
   };
 
-  fs.writeFileSync(
-    path.join(scenesDir, 'TMT.json'),
-    JSON.stringify(collection, null, 2)
-  );
+  fs.writeFileSync(sceneFile, JSON.stringify(collection, null, 2));
 }
 
 // Streaming architecture:
@@ -366,6 +397,23 @@ function initObsConfig({ destinations, wsPort, wsPassword }) {
   const configDir       = getObsConfigDir(obsDir);
   const primaryPlatform = destinations[0]?.name || '';
 
+  // Pre-create every directory OBS touches in portable mode so it never errors
+  // on "Failed to create directory" for new installs.
+  for (const sub of [
+    '',
+    'profiler_data',
+    'logs',
+    'crashes',
+    'plugin_config',
+    'plugin_config/obs-websocket',
+    'basic',
+    'basic/scenes',
+    'basic/profiles',
+    `basic/profiles/${primaryPlatform || 'TMT'}`,
+  ]) {
+    try { fs.mkdirSync(path.join(configDir, sub), { recursive: true }); } catch {}
+  }
+
   clearObsSentinel(configDir);
   writeGlobalIni(configDir, wsPort, wsPassword);
   writeObsWebSocketConfig(configDir, wsPort, wsPassword);
@@ -410,6 +458,11 @@ const OBS_DIALOG_TITLES = [
 //     ONCE (first run ~500ms), subsequent runs load the DLL instantly.
 //     Also calls FindWindowW by title for belt-and-suspenders coverage.
 function startObsWindowHider() {
+  // Windows-only: this hides OBS's window/dialogs via PowerShell + VBScript
+  // (AppActivate). macOS/Linux have no equivalent here — OBS is launched
+  // minimized instead, so skip the hider entirely off Windows.
+  if (process.platform !== 'win32') return;
+
   // Kill any previous instances
   for (const p of [obsHiderProc, obsDialogProc]) {
     if (p) { try { p.kill(); } catch {} }
@@ -531,20 +584,11 @@ function spawnObs() {
   // A leftover OBS process holds the websocket port and causes the new instance
   // to fail to bind — Electron then connects to the stale process which has
   // wrong config, causing streaming to fail.
-  try {
-    const { execSync } = require('child_process');
-    execSync('taskkill /F /IM obs64.exe /T', { stdio: 'ignore', timeout: 4000 });
-    console.log('[obs-manager] killed stale obs64.exe');
-  } catch {
-    // No stale process — that's fine
-  }
+  killStaleObs();
 
-  const args = [
-    '--portable',
-    '--minimize-to-tray',
-    '--disable-shutdown-check',
-    '--disable-updater',
-  ];
+  // --minimize-to-tray is a Windows/Linux tray feature; macOS OBS has no tray.
+  const args = ['--portable', '--disable-shutdown-check', '--disable-updater'];
+  if (process.platform !== 'darwin') args.splice(1, 0, '--minimize-to-tray');
 
   console.log('[obs-manager] launching OBS…');
 
@@ -561,6 +605,20 @@ function spawnObs() {
   });
 }
 
+// Force-kill any stray OBS process (holds the WS port / config lock), per-OS.
+function killStaleObs() {
+  try {
+    const { execSync } = require('child_process');
+    if (process.platform === 'win32') {
+      execSync('taskkill /F /IM obs64.exe /T', { stdio: 'ignore', timeout: 4000 });
+    } else {
+      // macOS / Linux
+      execSync("pkill -x obs 2>/dev/null; pkill -f 'OBS.app/Contents/MacOS/obs' 2>/dev/null; true",
+        { stdio: 'ignore', timeout: 4000, shell: '/bin/sh' });
+    }
+  } catch { /* nothing running — fine */ }
+}
+
 function killObs() {
   for (const p of [obsHiderProc, obsDialogProc]) {
     if (p) { try { p.kill(); } catch {} }
@@ -571,11 +629,7 @@ function killObs() {
     try { obsProcess.kill(); } catch {}
     obsProcess = null;
   }
-  // Also force-kill any stale obs64 processes not tracked by obsProcess
-  try {
-    const { execSync } = require('child_process');
-    execSync('taskkill /F /IM obs64.exe /T', { stdio: 'ignore', timeout: 3000 });
-  } catch {}
+  killStaleObs();
 }
 
 function isObsRunning() {

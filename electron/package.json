@@ -1,6 +1,6 @@
 {
   "name": "tmt-native",
-  "version": "1.0.3",
+  "version": "1.4.1",
   "description": "TMT branded streaming desktop app",
   "main": "main.js",
   "scripts": {
@@ -49,7 +49,14 @@
     "files": [
       "main.js",
       "preload.js",
+      "sc-preload.js",
       "obs-manager.js",
+      "chat-manager.js",
+      "chat-config.js",
+      "cookie-sync.js",
+      "logger.js",
+      "secrets.js",
+      "secrets.example.js",
       "renderer/**/*",
       "assets/**/*"
     ],

@@ -208,12 +208,30 @@ input::placeholder { color: var(--border-hi); }
 }
 
 .error-msg {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--red);
   text-align: center;
-  min-height: 14px;
-  letter-spacing: 0.06em;
-  text-shadow: 0 0 10px rgba(248,113,113,0.42);
+  min-height: 0;
+  letter-spacing: 0.04em;
+  line-height: 1.4;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: rgba(248,113,113,0.10);
+  border: 1px solid rgba(248,113,113,0.30);
+  display: none;
+}
+.error-msg:not(:empty) {
+  display: block;
+}
+@keyframes shake {
+  0%,100% { transform: translateX(0); }
+  20%      { transform: translateX(-6px); }
+  40%      { transform: translateX(6px); }
+  60%      { transform: translateX(-4px); }
+  80%      { transform: translateX(4px); }
+}
+.shake {
+  animation: shake 0.35s ease;
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -279,6 +297,47 @@ input::placeholder { color: var(--border-hi); }
   50%      { opacity: 0.25; box-shadow: none; }
 }
 
+/* ── Startup progress bar ──────────────────────────────────────────────────── */
+.startup-bar {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 26px;
+  flex-shrink: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  transition: opacity .5s;
+}
+.startup-bar.active { display: flex; }
+.startup-bar.fading { opacity: 0; pointer-events: none; }
+
+.startup-step { display: flex; align-items: center; gap: 5px; }
+
+.ss-icon {
+  display: inline-block;
+  width: 12px;
+  text-align: center;
+  transition: color .2s;
+}
+.ss-icon[data-status="pending"] { color: var(--muted); }
+.ss-icon[data-status="loading"] { color: var(--amber); animation: ss-spin .9s linear infinite; }
+.ss-icon[data-status="done"]    { color: var(--green); }
+.ss-icon[data-status="error"]   { color: var(--red); }
+.ss-icon[data-status="skip"]    { color: var(--muted); opacity: .4; }
+
+.ss-label { font-size: 8px; letter-spacing: .15em; color: var(--muted); transition: color .2s; }
+.startup-step:has(.ss-icon[data-status="loading"]) .ss-label { color: var(--amber); }
+.startup-step:has(.ss-icon[data-status="done"])    .ss-label { color: var(--green); }
+.startup-step:has(.ss-icon[data-status="error"])   .ss-label { color: var(--red); }
+
+.ss-sep { color: var(--border-hi); font-size: 8px; }
+
+@keyframes ss-spin { to { transform: rotate(360deg); } }
+
 /* ── Main area: camera + chat ──────────────────────────────────────────────── */
 .dash-main {
   display: flex;
@@ -311,6 +370,33 @@ input::placeholder { color: var(--border-hi); }
   object-fit: cover;
   transform: scaleX(-1);
   display: block;
+}
+
+/* Live program monitor — shows OBS's actual output (what viewers see) while
+   broadcasting, since the physical camera is owned by OBS at that point. Not
+   mirrored: this is the real outgoing frame, not a selfie preview. */
+#program-preview {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+  display: none;
+  z-index: 2;
+}
+.program-live-badge {
+  position: absolute;
+  top: 10px; left: 10px;
+  z-index: 3;
+  display: none;
+  padding: 3px 9px;
+  border-radius: 4px;
+  background: rgba(229,57,53,0.85);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
 }
 
 /* Vignette overlay */
@@ -801,6 +887,49 @@ input::placeholder { color: var(--border-hi); }
   letter-spacing: 0.06em;
 }
 
+/* Settings section labels */
+.settings-section-label {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.45em;
+  color: var(--muted);
+  padding-bottom: 8px;
+}
+
+/* Connection card (Stripchat / BongaCams login) */
+.connection-card {
+  background: var(--surface);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-lg);
+  margin-bottom: 16px;
+  transition: border-color .2s, box-shadow .2s;
+}
+.connection-card.is-connected {
+  border-color: rgba(52,211,153,0.30);
+  box-shadow: 0 0 0 1px rgba(52,211,153,0.06) inset;
+}
+.connection-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+}
+.connection-info { display: flex; align-items: center; gap: 10px; }
+.connection-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex-shrink: 0;
+  transition: background .3s, box-shadow .3s;
+}
+.connection-dot.connected {
+  background: #34d399;
+  box-shadow: 0 0 6px rgba(52,211,153,.5);
+}
+.connection-text { display: flex; flex-direction: column; gap: 3px; }
+.connection-name   { font-size: 13px; font-weight: 600; color: var(--white); }
+.connection-status { font-size: 11px; color: var(--muted); }
+
 /* Platform card */
 .platform-card {
   background: var(--surface);
@@ -877,6 +1006,18 @@ input::placeholder { color: var(--border-hi); }
 .platform-events {
   padding: 0 16px 14px;
   border-top: 1px solid var(--border);
+}
+
+.platform-missing-username {
+  padding: 10px 16px 14px;
+  border-top: 1px solid var(--border);
+}
+.missing-uname-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  color: #e6a817;
 }
 
 .platform-remove-btn {
@@ -1033,11 +1174,55 @@ input::placeholder { color: var(--border-hi); }
   user-select: text;
 }
 
+/* ── SC URL bar ────────────────────────────────────────────────────────────── */
+.sc-url-bar {
+  display: none;
+  position: fixed;
+  top: 30px;
+  left: 0; right: 0;
+  height: 35px;
+  background: #090b17;
+  border-bottom: 1px solid var(--border-mid);
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  z-index: 950;
+  -webkit-app-region: no-drag;
+}
+.sc-url-bar.visible { display: flex; }
+.sc-nav-btn {
+  width: 28px; height: 24px;
+  border: 1px solid var(--border-mid);
+  border-radius: 4px;
+  background: var(--surface2);
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  transition: color .12s, border-color .12s;
+}
+.sc-nav-btn:hover { color: var(--text); border-color: var(--border-hi); }
+.sc-url-input {
+  flex: 1;
+  height: 24px;
+  background: var(--surface3);
+  border: 1px solid var(--border-mid);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 11px;
+  padding: 0 8px;
+  outline: none;
+  font-family: 'Cascadia Code', 'Consolas', monospace;
+  user-select: text;
+}
+.sc-url-input:focus { border-color: var(--border-hi); background: var(--surface2); }
+
 /* ── Broadcast Center toggle (SC button in titlebar) ───────────────────────── */
-.titlebar-sc-btn {
+.titlebar-view-btn {
   -webkit-app-region: no-drag;
   position: absolute;
-  left: 14px;
   width: 20px; height: 20px;
   border-radius: 50%;
   background: var(--surface2);
@@ -1050,10 +1235,17 @@ input::placeholder { color: var(--border-hi); }
   display: flex; align-items: center; justify-content: center;
   transition: background .15s, color .15s, border-color .15s;
 }
-.titlebar-sc-btn:hover {
+.titlebar-sc-btn { left: 14px; }
+.titlebar-sc-btn:hover, .titlebar-sc-btn.active {
   background: rgba(179,100,255,0.18);
   color: #ce93d8;
   border-color: rgba(179,100,255,0.38);
+}
+.titlebar-cb-btn { left: 40px; }
+.titlebar-cb-btn:hover, .titlebar-cb-btn.active {
+  background: rgba(255,150,50,0.18);
+  color: #ffb74d;
+  border-color: rgba(255,150,50,0.38);
 }
 
 /* ── Stripchat manual-start modal ──────────────────────────────────────────── */
@@ -1125,3 +1317,210 @@ input::placeholder { color: var(--border-hi); }
   border-top: 1px solid var(--border);
   background: var(--surface3);
 }
+
+/* ── Admin overview ─────────────────────────────────────────────────────────── */
+.admin-updated {
+  font-size: 11px;
+  color: var(--muted);
+  margin-right: 4px;
+}
+.admin-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 20px;
+  overflow: hidden;
+}
+.admin-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.admin-stat {
+  background: var(--surface2);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  text-align: center;
+}
+.admin-stat-value {
+  font-size: 30px;
+  font-weight: 800;
+  color: var(--cyan);
+  line-height: 1.1;
+}
+.admin-stat-label {
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.admin-cols {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  min-height: 0;
+}
+.admin-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+.admin-section-title {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.admin-list { display: flex; flex-direction: column; gap: 4px; }
+.admin-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.admin-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--border-hi);
+  flex: 0 0 auto;
+}
+.admin-dot-live {
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green-glow);
+}
+.admin-name { font-weight: 700; color: var(--text); font-size: 13px; }
+.admin-meta { margin-left: auto; font-size: 11px; color: var(--muted); }
+.admin-ver  { font-size: 10px; color: var(--cyan-dim); min-width: 48px; text-align: right; }
+.admin-empty { font-size: 12px; color: var(--muted); padding: 10px; }
+.admin-events {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+.admin-event {
+  display: flex;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+.admin-event-ts   { color: var(--muted); flex: 0 0 auto; }
+.admin-event-user { color: var(--cyan); flex: 0 0 auto; min-width: 72px; }
+.admin-event-msg  { color: var(--text); }
+.admin-event-warn { background: rgba(255,180,60,0.08); }
+.admin-event-warn .admin-event-msg { color: var(--amber); }
+.admin-event-error { background: rgba(255,80,80,0.10); }
+.admin-event-error .admin-event-msg { color: var(--red); }
+
+/* ── Admin account detail drawer ────────────────────────────────────────────── */
+.admin-row-click { cursor: pointer; transition: border-color .12s, background .12s; }
+.admin-row-click:hover { border-color: var(--border-hi); background: var(--surface3); }
+
+.admin-detail-overlay {
+  position: fixed; inset: 30px 0 0 0;
+  background: rgba(4,5,10,0.72);
+  display: none; align-items: stretch; justify-content: flex-end;
+  z-index: 50;
+}
+.admin-detail-overlay.active { display: flex; }
+.admin-detail {
+  width: 560px; max-width: 92vw;
+  background: var(--surface);
+  border-left: 1px solid var(--border-mid);
+  display: flex; flex-direction: column;
+  padding: 16px 18px;
+  box-shadow: -16px 0 40px rgba(0,0,0,0.5);
+}
+.admin-detail-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.admin-detail-name { font-size: 18px; font-weight: 800; color: var(--text); }
+.admin-detail-sub  { margin-left: 10px; font-size: 11px; color: var(--muted); }
+.admin-detail-actions { display: flex; align-items: center; gap: 8px; }
+.admin-detail-msg {
+  font-size: 11px; color: var(--amber); min-height: 0; line-height: 1.4;
+}
+.admin-detail-msg:not(:empty) { margin-bottom: 8px; }
+.admin-detail-stats {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px;
+}
+.ad-stat {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 10px;
+}
+.ad-stat-k { font-size: 9px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.ad-stat-v { font-size: 13px; font-weight: 700; color: var(--text); margin-top: 2px; word-break: break-word; }
+.ad-ctx { color: var(--muted); }
+
+/* ── Admin create-account modal ─────────────────────────────────────────────── */
+#admin-create-overlay { align-items: center; justify-content: center; }
+.admin-create-modal {
+  width: 360px; max-width: 90vw;
+  background: var(--surface);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+}
+.admin-new-tag {
+  font-size: 8px; font-weight: 800; letter-spacing: .1em;
+  color: var(--green);
+  border: 1px solid var(--green);
+  border-radius: 3px;
+  padding: 1px 5px;
+  margin-left: 2px;
+}
+
+/* Subtle text link under the Sign in button */
+.btn-link {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 6px;
+  background: transparent;
+  border: none;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color .15s;
+}
+.btn-link:hover { color: var(--cyan); }
+
+/* ── Admin account: configured platforms ────────────────────────────────────── */
+.ad-destinations { display: flex; flex-direction: column; gap: 8px; }
+.ad-dest {
+  display: flex; align-items: flex-start; gap: 10px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 12px;
+}
+.ad-dest .plat-icon { flex: 0 0 auto; }
+.ad-dest-info { flex: 1; min-width: 0; }
+.ad-dest-name { font-size: 13px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.ad-dest-row { display: flex; gap: 8px; font-size: 11px; line-height: 1.6; }
+.ad-dest-k { color: var(--muted); flex: 0 0 38px; text-transform: uppercase; letter-spacing: .08em; font-size: 9px; padding-top: 1px; }
+.ad-dest-v { color: var(--text); word-break: break-all; font-family: ui-monospace, Consolas, monospace; }
+.ad-dest-key { color: var(--cyan-dim); }
+.ad-dest-status {
+  flex: 0 0 auto; align-self: center;
+  font-size: 9px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 4px;
+}
+.ad-dest-status.ok  { color: var(--green); border: 1px solid var(--green); }
+.ad-dest-status.off { color: var(--muted); border: 1px solid var(--border-mid); }

@@ -11,4 +11,7 @@ cookies.txt
 .env
 .claude/
 backend/.env
+admin-config.json
+electron/secrets.js
+electron/scripts/_upload.ps1
 electron/test-shots/

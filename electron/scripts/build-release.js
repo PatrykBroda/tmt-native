@@ -4,6 +4,7 @@
 const { execSync } = require('child_process');
 const fs   = require('fs');
 const path = require('path');
+const { syncUnpackedToDesktop } = require('./_sync-desktop');
 
 const ROOT     = path.join(__dirname, '..');
 const DIST     = path.join(ROOT, 'dist');
@@ -55,6 +56,26 @@ if (!fs.existsSync(outPath)) {
 }
 
 const sizeMb = (fs.statSync(outPath).size / 1024 / 1024).toFixed(0);
+
+// Copy latest installer to Desktop (Windows only), removing stale versioned copies.
+if (process.platform === 'win32') {
+  const desktopDir = path.join(require('os').homedir(), 'Desktop');
+  const destPath   = path.join(desktopDir, 'TMT Native.exe');
+  try {
+    // Remove any old versioned installer files left on the Desktop
+    fs.readdirSync(desktopDir)
+      .filter(f => /^TMT[- ]Streaming[- ]Setup.*\.exe$/i.test(f) || /^TMT Native \d/.test(f))
+      .forEach(f => { try { fs.rmSync(path.join(desktopDir, f)); } catch {} });
+    fs.copyFileSync(outPath, destPath);
+    console.log(`   Desktop:   ${destPath}  ✓`);
+  } catch (e) {
+    console.warn(`   Desktop copy failed: ${e.message}`);
+  }
+
+  // Also refresh the running app folder (Desktop/TMT Native/) from the same
+  // build, so the installed/running app is never stale vs the installer.
+  syncUnpackedToDesktop(path.join(DIST, 'win-unpacked'));
+}
 
 console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 console.log(`✓  Output:    ${outPath}`);
