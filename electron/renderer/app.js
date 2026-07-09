@@ -701,7 +701,31 @@ $('settings-btn').addEventListener('click', async () => {
   renderPlatforms(destinations);
   $('settings-version').textContent = `v${version}`;
   refreshScStatus();
+  loadOverlaySettings();
   showScreen('settings');
+});
+
+// ── Stream overlay (promo text) ───────────────────────────────────────────────
+async function loadOverlaySettings() {
+  try {
+    const cfg = await window.api.getOverlay();
+    $('ov-text').value       = cfg?.text || '';
+    $('ov-enabled').checked  = !!cfg?.enabled;
+  } catch {}
+}
+
+$('ov-save').addEventListener('click', async () => {
+  const btn = $('ov-save');
+  btn.disabled = true;
+  const prev = btn.textContent;
+  btn.textContent = 'Saving…';
+  try {
+    await window.api.setOverlay({ text: $('ov-text').value.trim(), enabled: $('ov-enabled').checked });
+    btn.textContent = 'Saved ✓';
+  } catch {
+    btn.textContent = 'Failed';
+  }
+  setTimeout(() => { btn.textContent = prev; btn.disabled = false; }, 1200);
 });
 
 $('check-updates-btn').addEventListener('click', () => window.api.checkForUpdates());

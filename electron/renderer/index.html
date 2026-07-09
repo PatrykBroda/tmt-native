@@ -199,6 +199,18 @@
       </div>
     </div>
 
+    <div class="settings-section-label" style="margin-top:8px">STREAM OVERLAY</div>
+    <div class="connection-card">
+      <label class="ov-row">
+        <input type="checkbox" id="ov-enabled" />
+        <span>Show promo text in the top-left corner of the stream</span>
+      </label>
+      <input type="text" id="ov-text" maxlength="200" autocomplete="off" spellcheck="false"
+             placeholder="e.g.  Follow me → IG @yourname  •  X @yourname" style="margin-top:10px;" />
+      <p class="ov-hint">Great for socials. Applies live to the stream — no need to go offline.</p>
+      <button class="btn btn-primary" id="ov-save" style="margin-top:10px;">Save overlay</button>
+    </div>
+
     <div class="settings-section-label" style="margin-top:8px">STREAM PLATFORMS</div>
     <div class="platform-list" id="platform-list">
       <!-- populated by JS -->

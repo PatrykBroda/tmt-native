@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld('api', {
   getAccountDestinations: (userId, username) => ipcRenderer.invoke('desktop:get-account-destinations', { userId, username }),
   getChatStatus:   ()           => ipcRenderer.invoke('desktop:get-chat-status'),
   getProgramFrame: ()           => ipcRenderer.invoke('desktop:get-program-frame'),
+  getOverlay:      ()           => ipcRenderer.invoke('desktop:get-overlay'),
+  setOverlay:      (cfg)        => ipcRenderer.invoke('desktop:set-overlay', cfg),
   setEventsToken:  (id, token)    => ipcRenderer.invoke('desktop:set-events-token', { id, token }),
   setUsername:     (id, username) => ipcRenderer.invoke('desktop:set-username',     { id, username }),
   toggleMute:          ()           => ipcRenderer.invoke('desktop:toggle-mute'),

@@ -794,6 +794,68 @@ async function ensureCameraSource() {
   }
 }
 
+// ── Promo text overlay (top-left of the stream) ───────────────────────────────
+let overlayConfig = null; // { text, enabled }
+const overlayConfigPath = () => path.join(app.getPath('userData'), 'overlay.json');
+
+function loadOverlayConfig() {
+  if (overlayConfig) return overlayConfig;
+  try { overlayConfig = JSON.parse(fs.readFileSync(overlayConfigPath(), 'utf8')); }
+  catch { overlayConfig = { text: '', enabled: false }; }
+  if (typeof overlayConfig.text !== 'string') overlayConfig.text = '';
+  overlayConfig.enabled = !!overlayConfig.enabled;
+  return overlayConfig;
+}
+function saveOverlayConfig(cfg) {
+  overlayConfig = { text: String(cfg?.text || '').slice(0, 500), enabled: !!cfg?.enabled };
+  try { fs.writeFileSync(overlayConfigPath(), JSON.stringify(overlayConfig), 'utf8'); } catch {}
+  return overlayConfig;
+}
+
+// Create/update an OBS text source named "Promo" pinned to the top-left corner,
+// used to promote socials on stream. Cross-platform: GDI+ text on Windows,
+// FreeType2 on macOS/Linux. Idempotent — safe to call on every connect/change.
+async function ensureOverlaySource() {
+  if (!obsClient) return;
+  const cfg = loadOverlayConfig();
+  try {
+    let inputKinds = [];
+    try { ({ inputKinds } = await obsClient.call('GetInputKindList')); } catch {}
+    const textKind = ['text_gdiplus_v3', 'text_gdiplus_v2', 'text_ft2_source_v2', 'text_ft2_source']
+      .find(k => inputKinds.includes(k));
+    if (!textKind) { logger.warn('No OBS text source kind available', { inputKinds }); return; }
+    const gdi = textKind.startsWith('text_gdiplus');
+
+    const { currentProgramSceneName: scene } = await obsClient.call('GetCurrentProgramScene');
+    const { sceneItems } = await obsClient.call('GetSceneItemList', { sceneName: scene });
+    let item = sceneItems.find(it => it.sourceName === 'Promo');
+    let sceneItemId = item?.sceneItemId;
+
+    if (!item) {
+      ({ sceneItemId } = await obsClient.call('CreateInput', {
+        sceneName: scene, inputName: 'Promo', inputKind: textKind,
+        inputSettings: {}, sceneItemEnabled: cfg.enabled,
+      }));
+      // Anchor to the top-left corner with a small margin.
+      await obsClient.call('SetSceneItemTransform', {
+        sceneName: scene, sceneItemId,
+        sceneItemTransform: { alignment: 5, positionX: 48, positionY: 40 }, // 5 = top|left
+      }).catch(() => {});
+    }
+
+    // White bold text with a dark outline so it's readable over any camera image.
+    const font = { face: 'Arial', size: 42, style: 'Bold', flags: 0 };
+    const settings = gdi
+      ? { text: cfg.text, font, color: 4294967295, outline: true, outline_color: 4278190080, outline_size: 4 }
+      : { text: cfg.text, font, color1: 4294967295, color2: 4294967295, outline: true, drop_shadow: true };
+    await obsClient.call('SetInputSettings', { inputName: 'Promo', overlay: true, inputSettings: settings });
+    await obsClient.call('SetSceneItemEnabled', { sceneName: scene, sceneItemId, sceneItemEnabled: cfg.enabled });
+    logger.info('OBS promo overlay applied', { enabled: cfg.enabled, kind: textKind, chars: cfg.text.length });
+  } catch (e) {
+    logger.warn('ensureOverlaySource failed', { error: e.message });
+  }
+}
+
 // Schedule a single reconnect attempt. Guarded so the ConnectionClosed handler
 // and the connect-failure catch block can't stack multiple timers (which during
 // OBS's boot produced a storm of overlapping reconnect attempts).
@@ -853,6 +915,7 @@ async function connectObs(wsPassword) {
         await obsClient.call('SetCurrentSceneCollection', { sceneCollectionName: 'TMT' });
     } catch {}
     await ensureCameraSource();
+    await ensureOverlaySource();
     await applyStreamService();
     startViewerCountPolling();
     startEventsPolling();
@@ -1167,6 +1230,7 @@ ipcMain.handle('desktop:go-live', async () => {
   // so we never push a black screen even if OBS connected before the device
   // was ready. Idempotent — no-op when a camera is already in the scene.
   await ensureCameraSource();
+  await ensureOverlaySource();
 
   // Log OBS scene and sources so we can diagnose black-camera issues
   try {
@@ -1723,6 +1787,14 @@ ipcMain.handle('desktop:get-program-frame', async () => {
   } catch (e) {
     return { ok: false, error: e.message };
   }
+});
+
+// Promo text overlay (top-left of stream)
+ipcMain.handle('desktop:get-overlay', () => loadOverlayConfig());
+ipcMain.handle('desktop:set-overlay', async (_e, cfg) => {
+  saveOverlayConfig(cfg);
+  await ensureOverlaySource();
+  return { ok: true, ...overlayConfig };
 });
 
 // ── Admin logs (all users) ────────────────────────────────────────────────────

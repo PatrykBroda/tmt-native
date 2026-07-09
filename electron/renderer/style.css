@@ -1524,3 +1524,11 @@ input::placeholder { color: var(--border-hi); }
 }
 .ad-dest-status.ok  { color: var(--green); border: 1px solid var(--green); }
 .ad-dest-status.off { color: var(--muted); border: 1px solid var(--border-mid); }
+
+/* ── Stream overlay settings ─────────────────────────────────────────────────── */
+.ov-row {
+  display: flex; align-items: center; gap: 9px;
+  font-size: 12px; color: var(--text); cursor: pointer;
+}
+.ov-row input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; accent-color: var(--cyan-dim); }
+.ov-hint { font-size: 10px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
