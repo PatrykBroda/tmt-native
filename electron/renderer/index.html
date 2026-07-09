@@ -117,6 +117,17 @@
             <span>&#9679;&nbsp; NO CAMERA</span>
           </div>
         </div>
+
+        <!-- Promo overlay bar — type socials text, flip switch to show on stream -->
+        <div class="promo-bar">
+          <span class="promo-label">&#128226; PROMO</span>
+          <input id="promo-input" type="text" maxlength="200" autocomplete="off" spellcheck="false"
+                 placeholder="Type your socials here — e.g. Follow me on IG @yourname" />
+          <span id="promo-saved" class="promo-saved">Saved &#10003;</span>
+          <button id="promo-toggle" class="promo-toggle" title="Show or hide this text on your stream">
+            <span class="promo-toggle-dot"></span><span id="promo-toggle-label">OFF</span>
+          </button>
+        </div>
       </div>
 
       <!-- Platform toggles sidebar -->
@@ -197,18 +208,6 @@
         </div>
         <button class="btn btn-ghost" id="sc-open-btn">Open Panel</button>
       </div>
-    </div>
-
-    <div class="settings-section-label" style="margin-top:8px">STREAM OVERLAY</div>
-    <div class="connection-card">
-      <label class="ov-row">
-        <input type="checkbox" id="ov-enabled" />
-        <span>Show promo text in the top-left corner of the stream</span>
-      </label>
-      <input type="text" id="ov-text" maxlength="200" autocomplete="off" spellcheck="false"
-             placeholder="e.g.  Follow me → IG @yourname  •  X @yourname" style="margin-top:10px;" />
-      <p class="ov-hint">Great for socials. Applies live to the stream — no need to go offline.</p>
-      <button class="btn btn-primary" id="ov-save" style="margin-top:10px;">Save overlay</button>
     </div>
 
     <div class="settings-section-label" style="margin-top:8px">STREAM PLATFORMS</div>

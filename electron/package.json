@@ -1,6 +1,6 @@
 {
   "name": "tmt-native",
-  "version": "1.4.2",
+  "version": "1.4.3",
   "description": "TMT branded streaming desktop app",
   "main": "main.js",
   "scripts": {

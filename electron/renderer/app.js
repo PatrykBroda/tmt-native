@@ -257,6 +257,55 @@ function stopProgramPreview() {
   $('camera-preview').style.display     = 'block';
 }
 
+// ── Promo overlay bar (dashboard) — deliberately dead-simple for models ────────
+let promoEnabled   = false;
+let promoSaveTimer = null;
+
+async function loadPromoBar() {
+  try {
+    const cfg = await window.api.getOverlay();
+    if ($('promo-input')) $('promo-input').value = cfg?.text || '';
+    promoEnabled = !!cfg?.enabled;
+    updatePromoToggle();
+  } catch {}
+}
+
+function updatePromoToggle() {
+  const btn = $('promo-toggle');
+  if (!btn) return;
+  btn.classList.toggle('on', promoEnabled);
+  $('promo-toggle-label').textContent = promoEnabled ? 'ON' : 'OFF';
+  btn.title = promoEnabled
+    ? 'Showing on your stream — click to hide'
+    : 'Hidden — click to show it on your stream';
+}
+
+function savePromo() {
+  window.api.setOverlay({ text: $('promo-input').value.trim(), enabled: promoEnabled })
+    .then(() => {
+      const s = $('promo-saved');
+      if (s) { s.classList.add('show'); setTimeout(() => s.classList.remove('show'), 1300); }
+    })
+    .catch(() => {});
+}
+
+if ($('promo-input')) {
+  // Auto-save shortly after they stop typing — no Save button to forget.
+  $('promo-input').addEventListener('input', () => {
+    clearTimeout(promoSaveTimer);
+    promoSaveTimer = setTimeout(savePromo, 700);
+  });
+  $('promo-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { clearTimeout(promoSaveTimer); savePromo(); e.target.blur(); }
+  });
+  $('promo-toggle').addEventListener('click', () => {
+    promoEnabled = !promoEnabled;
+    updatePromoToggle();
+    savePromo();
+  });
+  loadPromoBar();
+}
+
 // ── Platform sidebar (live destination toggles) ───────────────────────────────
 const PLATFORM_META = {
   chaturbate: { label: 'Chaturbate', abbr: 'CB' },
@@ -701,31 +750,7 @@ $('settings-btn').addEventListener('click', async () => {
   renderPlatforms(destinations);
   $('settings-version').textContent = `v${version}`;
   refreshScStatus();
-  loadOverlaySettings();
   showScreen('settings');
-});
-
-// ── Stream overlay (promo text) ───────────────────────────────────────────────
-async function loadOverlaySettings() {
-  try {
-    const cfg = await window.api.getOverlay();
-    $('ov-text').value       = cfg?.text || '';
-    $('ov-enabled').checked  = !!cfg?.enabled;
-  } catch {}
-}
-
-$('ov-save').addEventListener('click', async () => {
-  const btn = $('ov-save');
-  btn.disabled = true;
-  const prev = btn.textContent;
-  btn.textContent = 'Saving…';
-  try {
-    await window.api.setOverlay({ text: $('ov-text').value.trim(), enabled: $('ov-enabled').checked });
-    btn.textContent = 'Saved ✓';
-  } catch {
-    btn.textContent = 'Failed';
-  }
-  setTimeout(() => { btn.textContent = prev; btn.disabled = false; }, 1200);
 });
 
 $('check-updates-btn').addEventListener('click', () => window.api.checkForUpdates());

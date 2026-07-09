@@ -1532,3 +1532,69 @@ input::placeholder { color: var(--border-hi); }
 }
 .ov-row input[type="checkbox"] { width: 15px; height: 15px; cursor: pointer; accent-color: var(--cyan-dim); }
 .ov-hint { font-size: 10px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+
+/* ── Promo overlay bar (dashboard) — model-friendly ─────────────────────────── */
+.promo-bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-top: 9px;
+  padding: 8px 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border-mid);
+  border-radius: var(--radius);
+  flex: 0 0 auto;
+}
+.promo-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+#promo-input {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 11px;
+  font-size: 12px;
+}
+.promo-saved {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--green);
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity .2s;
+}
+.promo-saved.show { opacity: 1; }
+.promo-toggle {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-mid);
+  background: var(--surface3);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  cursor: pointer;
+  transition: all .15s;
+}
+.promo-toggle-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--border-hi);
+  transition: all .15s;
+}
+.promo-toggle.on {
+  background: rgba(52,211,153,0.16);
+  color: var(--green);
+  border-color: var(--green);
+}
+.promo-toggle.on .promo-toggle-dot {
+  background: var(--green);
+  box-shadow: 0 0 8px var(--green-glow);
+}
