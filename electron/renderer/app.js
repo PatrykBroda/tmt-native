@@ -471,8 +471,13 @@ window.api.onChatMessage(({ type, user, msg, platform }) => {
 });
 
 // ── Viewer count ──────────────────────────────────────────────────────────────
-window.api.onViewerCount(n => {
-  $('viewer-count').textContent = Number(n).toLocaleString();
+window.api.onViewerCount(snap => {
+  if (typeof snap === 'number') snap = { total: snap, platforms: {} };
+  $('viewer-count').textContent = Number(snap.total).toLocaleString();
+  const parts = Object.entries(snap.platforms || {});
+  $('viewer-breakdown').textContent = parts.length > 1
+    ? parts.map(([p, n]) => `${p} ${Number(n).toLocaleString()}`).join(' · ')
+    : '';
 });
 
 // ── Mic mute ─────────────────────────────────────────────────────────────────

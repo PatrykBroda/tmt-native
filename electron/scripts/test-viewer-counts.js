@@ -1,0 +1,10 @@
+const assert = require('assert');
+const { createViewerCounts } = require('../viewer-counts');
+const out = [];
+const v = createViewerCounts(s => out.push(s));
+v.set('Chaturbate', 10); v.set('Stripchat', 5); v.set('Chaturbate', 12); v.set('Chaturbate', 12);
+v.set('Stripchat', 'x'); v.set('Stripchat', -1);
+assert.strictEqual(out.length, 3);
+assert.deepStrictEqual(out[2], { total: 17, platforms: { Chaturbate: 12, Stripchat: 5 } });
+v.clear(); assert.strictEqual(v.snapshot().total, 0);
+console.log('viewer-counts OK');

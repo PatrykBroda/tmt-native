@@ -361,6 +361,7 @@ function ensureFirewallRule() {
 // ── Chaturbate Events API polling ─────────────────────────────────────────────
 let eventsPoller          = null;
 let viewerPollInterval    = null;
+const viewerCounts = require('./viewer-counts').createViewerCounts(snap => mainWindow?.webContents.send('desktop:viewer-count', snap));
 
 async function startEventsPolling() {
   if (eventsPoller?.isActive()) return;
@@ -391,7 +392,7 @@ function handleChaturbateEvent(ev) {
     case 'roomCount': {
       const n = ev.object?.count ?? ev.object?.num_users ?? ev.object?.viewers;
       if (n !== undefined && n !== null) {
-        mainWindow?.webContents.send('desktop:viewer-count', n);
+        viewerCounts.set('Chaturbate', n);
         scLog(`[cb-viewers] ${n} viewers (event)`);
       }
       return;
@@ -453,8 +454,6 @@ async function startViewerCountPolling() {
     try { await pollOnce(); } finally { polling = false; }
   };
   const pollOnce = async () => {
-    let total = 0;
-    let got   = false;
     try {
       if (cbDest) {
         const res = await fetch(
@@ -465,8 +464,7 @@ async function startViewerCountPolling() {
           const data = await res.json();
           const room = (data.results || []).find(r => r.username === cbDest.username);
           if (room?.num_users !== undefined) {
-            total += room.num_users;
-            got    = true;
+            viewerCounts.set('Chaturbate', room.num_users);
             scLog(`[cb-viewers] ${room.num_users}`);
           }
         }
@@ -481,20 +479,17 @@ async function startViewerCountPolling() {
         if (res.ok) {
           const data = await res.json();
           const v = data?.model?.viewersCount ?? data?.model?.viewers ?? null;
-          if (v !== null) { total += v; got = true; scLog(`[sc-viewers] ${v}`); }
+          if (v !== null) { viewerCounts.set('Stripchat', v); scLog(`[sc-viewers] ${v}`); }
         }
       }
     } catch {}
-    if (got) {
-      mainWindow?.webContents.send('desktop:viewer-count', total);
-      scLog(`[viewers] total ${total}`);
-    }
   };
   poll();
   viewerPollInterval = setInterval(poll, 30000);
 }
 
 function stopViewerCountPolling() {
+  viewerCounts.clear();
   if (viewerPollInterval) { clearInterval(viewerPollInterval); viewerPollInterval = null; }
 }
 
