@@ -1223,14 +1223,15 @@ input::placeholder { color: var(--border-hi); }
 .titlebar-view-btn {
   -webkit-app-region: no-drag;
   position: absolute;
-  width: 20px; height: 20px;
-  border-radius: 50%;
+  height: 20px; padding: 0 10px;
+  border-radius: 10px;
   background: var(--surface2);
   border: 1px solid var(--border-mid);
   color: var(--muted);
-  font-size: 7px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-shadow: none;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center;
   transition: background .15s, color .15s, border-color .15s;
@@ -1241,7 +1242,7 @@ input::placeholder { color: var(--border-hi); }
   color: #ce93d8;
   border-color: rgba(179,100,255,0.38);
 }
-.titlebar-cb-btn { left: 40px; }
+.titlebar-cb-btn { left: 92px; }
 .titlebar-cb-btn:hover, .titlebar-cb-btn.active {
   background: rgba(255,150,50,0.18);
   color: #ffb74d;
@@ -1767,3 +1768,5 @@ input::placeholder { color: var(--border-hi); }
 #settings-screen > * { flex-shrink: 0; }
 .platform-list { flex: 0 0 auto; overflow: visible; }
 .platform-card { flex-shrink: 0; }
+
+.login-help { margin: 10px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
