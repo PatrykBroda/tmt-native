@@ -11,6 +11,17 @@ const cookieSync  = require('./cookie-sync');
 const logger      = require('./logger');
 const { ToyManager, parseTipText } = require('./toy-manager');
 
+// ── Safety nets ───────────────────────────────────────────────────────────────
+// A second copy of the app would kill the first one's OBS (killStaleObs) and drop
+// a live stream — so only one instance may run; a second launch just focuses the first.
+if (!process.env.TMT_ALLOW_MULTI && !app.requestSingleInstanceLock()) { app.quit(); process.exit(0); }
+app.on('second-instance', () => {
+  if (mainWindow) { if (mainWindow.isMinimized()) mainWindow.restore(); mainWindow.focus(); }
+});
+// Never let a stray exception pop Electron's blocking error dialog mid-stream.
+process.on('uncaughtException',  e => { try { logger.error('uncaughtException',  { error: String((e && e.stack) || e) }); } catch {} console.error('[uncaught]', e); });
+process.on('unhandledRejection', e => { try { logger.error('unhandledRejection', { error: String((e && e.stack) || e) }); } catch {} console.error('[unhandled]', e); });
+
 // ── Config ────────────────────────────────────────────────────────────────────
 const API_BASE           = process.env.API_BASE || 'https://admin.agencytmt.com';
 const OBS_WS_PORT        = Number(process.env.OBS_WS_PORT) || 4455;
@@ -916,6 +927,23 @@ async function ensureOverlaySource() {
     logger.warn('ensureOverlaySource failed', { error: e.message });
   }
 }
+
+// If OBS crashes (or is closed) while the app is running, bring it back automatically.
+const obsRespawnOk = obsMan.createRespawnLimiter();
+obsMan.onUnexpectedExit((code) => {
+  if (!storedToken) return;
+  logger.warn('OBS exited unexpectedly', { code });
+  if (!obsRespawnOk()) {
+    logger.error('OBS keeps crashing — giving up auto-restart');
+    mainWindow?.webContents.send('desktop:stream-error', 'The video engine keeps stopping. Please close and reopen the app.');
+    return;
+  }
+  mainWindow?.webContents.send('desktop:stream-error', 'The video engine stopped — restarting it now. If you were live, press Go Live again in a few seconds.');
+  setTimeout(() => {
+    if (!storedToken) return;
+    try { obsMan.spawnObs(); logger.info('OBS respawned'); } catch (e) { logger.error('OBS respawn failed', { error: e.message }); }
+  }, 2000);
+});
 
 // Schedule a single reconnect attempt. Guarded so the ConnectionClosed handler
 // and the connect-failure catch block can't stack multiple timers (which during

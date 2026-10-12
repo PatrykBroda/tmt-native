@@ -55,9 +55,9 @@ async function run() {
   await new Promise(r => setTimeout(r, 3000));
 
   const windows = app.windows();
-  log(`Windows open: ${windows.length}`);
+  log(`Windows open: ${windows.length} ${windows.map(w=>w.url()).join(" , ")}`);
 
-  const page = windows.find(w => !w.url().startsWith('devtools://'))
+  const page = windows.find(w => w.url().includes("renderer/index.html"))
             ?? await app.firstWindow();
 
   if (!page) { err('No renderer window found'); await app.close(); process.exit(1); }

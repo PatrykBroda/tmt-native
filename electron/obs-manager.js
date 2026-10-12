@@ -599,10 +599,31 @@ function spawnObs() {
   });
 
   obsProcess.on('error', err => console.error('[OBS spawn error]', err.message));
+  const proc = obsProcess;
+  obsIntentionalKill = false;
   obsProcess.on('exit', (code, sig) => {
     console.log(`[OBS] exited code=${code} sig=${sig}`);
-    obsProcess = null;
+    if (obsProcess === proc) obsProcess = null;
+    if (!obsIntentionalKill && typeof obsExitHandler === 'function') {
+      try { obsExitHandler(code, sig); } catch (e) { console.error('[OBS exit handler]', e.message); }
+    }
   });
+}
+
+// Called when OBS dies on its own (crash / user closed it). Not called for our own killObs().
+let obsExitHandler = null;
+let obsIntentionalKill = false;
+function onUnexpectedExit(fn) { obsExitHandler = fn; }
+
+// Restart budget: allow `max` respawns per `windowMs` so a crash-loop doesn't spin forever.
+function createRespawnLimiter(max = 5, windowMs = 10 * 60 * 1000) {
+  let times = [];
+  return function tryRespawn(now = Date.now()) {
+    times = times.filter(t => now - t < windowMs);
+    if (times.length >= max) return false;
+    times.push(now);
+    return true;
+  };
 }
 
 // Force-kill any stray OBS process (holds the WS port / config lock), per-OS.
@@ -620,6 +641,7 @@ function killStaleObs() {
 }
 
 function killObs() {
+  obsIntentionalKill = true;
   for (const p of [obsHiderProc, obsDialogProc]) {
     if (p) { try { p.kill(); } catch {} }
   }
@@ -646,4 +668,6 @@ module.exports = {
   spawnObs,
   killObs,
   isObsRunning,
+  onUnexpectedExit,
+  createRespawnLimiter,
 };
