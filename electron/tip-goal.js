@@ -36,6 +36,18 @@ function createTipGoal(initial = {}, onChange = () => {}) {
       if (c.enabled !== undefined) cfg.enabled = !!c.enabled;
       emit();
     },
+    // Running state, persisted so an app crash/restart mid-show doesn't zero the goal.
+    snapshot: () => ({ total, tippers: [...tippers], savedAt: Date.now() }),
+    restore(s, maxAgeMs = 6 * 3600 * 1000, now = Date.now()) {
+      if (!s || !Number.isFinite(s.savedAt) || now - s.savedAt > maxAgeMs || now < s.savedAt - 60000) return false;
+      const tt = Math.floor(Number(s.total));
+      if (!(tt >= 1) || !Array.isArray(s.tippers)) return false;
+      tippers.clear();
+      for (const [u, n] of s.tippers.slice(0, MAX_TIPPERS)) { const k = Math.floor(Number(n)); if (k >= 1) tippers.set(String(u), k); }
+      total = tt;
+      emit();
+      return true;
+    },
     reset() { total = 0; tippers.clear(); emit(); },
     getConfig: () => ({ ...cfg }),
     getView: view,

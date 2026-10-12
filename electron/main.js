@@ -897,6 +897,14 @@ const { ensureTextSource, parseTipMenu, tipMenuText } = require('./obs-text-sour
 const goalConfigPath = () => path.join(app.getPath('userData'), 'tipgoal.json');
 let tipGoal = null;
 let goalObsTimer = null;
+let goalSaveTimer = null;
+const goalStatePath = () => path.join(app.getPath('userData'), 'tipgoal-state.json');
+function saveGoalState() {
+  clearTimeout(goalSaveTimer);
+  goalSaveTimer = setTimeout(() => {
+    try { fs.writeFileSync(goalStatePath(), JSON.stringify(getTipGoal().snapshot()), 'utf8'); } catch {}
+  }, 500);
+}
 function getTipGoal() {
   if (tipGoal) return tipGoal;
   let saved = {};
@@ -905,7 +913,11 @@ function getTipGoal() {
     mainWindow?.webContents.send('desktop:goal-update', view);
     clearTimeout(goalObsTimer);           // tips can arrive in bursts — coalesce OBS updates
     goalObsTimer = setTimeout(() => { ensureGoalSource().catch(() => {}); }, 600);
+    if (tipGoal) saveGoalState();
   });
+  try {
+    if (tipGoal.restore(JSON.parse(fs.readFileSync(goalStatePath(), 'utf8')))) logger.info('[goal] restored running total after restart');
+  } catch {}
   return tipGoal;
 }
 function saveGoalConfig() {

@@ -15,4 +15,15 @@ assert.match(g.overlayText(), /GOAL REACHED/);
 g.configure({ target: 'junk', title: '' }); assert.strictEqual(g.getConfig().target, 100); assert.strictEqual(g.getConfig().title, 'Tip goal');
 g.reset(); assert.strictEqual(g.getView().total, 0); assert.strictEqual(g.getView().top, null);
 assert.strictEqual(createTipGoal({ target: -3 }).getConfig().target, 1000);
+// persistence across restart
+{
+  const a = createTipGoal({ target: 100 }); a.addTip('x', 40); a.addTip('y', 10);
+  const snap = JSON.parse(JSON.stringify(a.snapshot()));
+  const b = createTipGoal({ target: 100 });
+  assert.strictEqual(b.restore(snap), true);
+  assert.strictEqual(b.getView().total, 50); assert.deepStrictEqual(b.getView().top, { user: 'x', tokens: 40 });
+  assert.strictEqual(createTipGoal({}).restore(snap, 1000, snap.savedAt + 5000), false, 'stale state ignored');
+  for (const bad of [null, {}, { total: 'x', savedAt: Date.now(), tippers: [] }, { total: 5, savedAt: Date.now() }]) assert.strictEqual(createTipGoal({}).restore(bad), false);
+  const r = createTipGoal({}); r.addTip('q', 5); a.reset(); assert.strictEqual(a.snapshot().total, 0);
+}
 console.log('tip-goal OK');
