@@ -15,6 +15,7 @@ const page = app.windows().find(w => w.url().includes('renderer/index.html')) ??
 let fail = 0;
 const check = async (n, fn) => { try { await fn(); console.log('  ✓ ' + n); } catch (e) { fail++; console.log('  ✗ ' + n + '\n    ' + e.message); } };
 await page.evaluate(() => showScreen('dashboard'));
+await page.click('#extras-toggle');   // Extras are collapsed by default (round 12)
 await page.fill('#tipmenu-input', '25 = blow a kiss; 50 = twirl; 100 = flash');
 await sleep(1500);
 await page.click('#tipmenu-toggle'); await sleep(500);

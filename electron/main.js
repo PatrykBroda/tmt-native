@@ -109,6 +109,7 @@ function persistScUsername(username) {
 }
 let chatManager        = null;
 let disabledDestIds    = new Set(); // ids of destinations turned off by the user
+let appQuitting = false, forceCloseWindow = false;
 let cachedMicName      = null;      // resolved once on first OBS connect, reused for toggle
 let scChatScript       = null;      // set in setupBroadcastView, reused by auto-fixer
 let lastScChatEventMs  = 0;         // timestamp of last SC chat event (auto-fixer health check)
@@ -717,6 +718,7 @@ ipcMain.handle('desktop:toys-test',       (_e, { intensity, seconds }) => getToy
 // Test-only: push a synthetic raw platform event through the real parsing code.
 // Disabled unless the app is launched with TMT_TEST_HOOKS=1.
 if (process.env.TMT_TEST_HOOKS === '1') {
+  ipcMain.handle('desktop:test-want-live', (_e, v) => { streamGuard.setWantLive(v); return true; });
   ipcMain.handle('desktop:test-inject', (_e, { kind, payload }) => {
     if (kind === 'chaturbate') handleChaturbateEvent(payload);                 // payload = CB events-API event object
     else if (kind === 'stripchat') handleScWsFrame(payload);                   // payload = raw socket.io frame string
@@ -2732,6 +2734,7 @@ function checkForUpdates(silent = false) {
 }
 
 ipcMain.handle('desktop:check-for-updates', () => checkForUpdates(false));
+ipcMain.handle('desktop:force-close', () => { forceCloseWindow = true; mainWindow?.close(); });
 ipcMain.handle('desktop:get-app-version',   () => app.getVersion());
 
 ipcMain.handle('desktop:sc-login-status', async () => {
@@ -2764,7 +2767,15 @@ function createWindow() {
   });
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
   mainWindow.maximize();
-  mainWindow.on('closed', () => { mainWindow = null; });
+  // Never drop a live show by accident: closing the window while live asks first.
+  mainWindow.on('close', (e) => {
+    if (appQuitting || forceCloseWindow || !streamGuard.isWantLive()) return;
+    e.preventDefault();
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+    mainWindow.webContents.send('desktop:confirm-close');
+  });
+  mainWindow.on('closed', () => { mainWindow = null; forceCloseWindow = false; });
   // Re-sync mute state once the renderer DOM is ready — fixes the race where
   // connectObs() fires before createWindow() and mainWindow is still null.
   mainWindow.webContents.on('did-finish-load', async () => {
@@ -2880,6 +2891,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  appQuitting = true;
   logger.info('App closing');
   logger.stop();
   stopStatusPolling();

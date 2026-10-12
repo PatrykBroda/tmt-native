@@ -67,6 +67,9 @@ contextBridge.exposeInMainWorld('api', {
   toysStop:        ()    => ipcRenderer.invoke('desktop:toys-stop'),
   toysTest:        (intensity, seconds) => ipcRenderer.invoke('desktop:toys-test', { intensity, seconds }),
   onToyStatus:     (cb)  => ipcRenderer.on('desktop:toy-status', (_e, d) => cb(d)),
+  testWantLive:    (v)   => ipcRenderer.invoke('desktop:test-want-live', v),
   testInject:      (kind, payload) => ipcRenderer.invoke('desktop:test-inject', { kind, payload }),
+  onConfirmClose:   (cb) => ipcRenderer.on('desktop:confirm-close', () => cb()),
+  forceClose:       ()   => ipcRenderer.invoke('desktop:force-close'),
   onStartupStatus:  (cb) => ipcRenderer.on('startup-status',          (_e, d) => cb(d)),
 });

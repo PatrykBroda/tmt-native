@@ -1,0 +1,30 @@
+// UX walkthrough screenshots of each first-run step (fake data; no real OBS/platform).
+//   node scripts/shot-ux.mjs <shotsDir> <round> <tag>     e.g. ... shots 12 before
+import { _electron as electron } from 'playwright-core';
+import fs from 'fs'; import os from 'os'; import path from 'path';
+import { fileURLToPath } from 'url';
+const APP_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const BIN = path.join(APP_DIR, 'node_modules', 'electron', 'dist', 'electron.exe');
+const SHOTS = process.argv[2]; const R = process.argv[3] || 'x'; const TAG = process.argv[4] || 'after';
+fs.mkdirSync(SHOTS, { recursive: true });
+const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'tmt-ux-'));
+const env = { ...process.env, TMT_TEST_HOOKS: '1', TMT_ALLOW_MULTI: '1' }; delete env.ELECTRON_RUN_AS_NODE;
+const app = await electron.launch({ executablePath: BIN, args: [APP_DIR, `--user-data-dir=${userData}`], env, timeout: 30000 });
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+await sleep(2500);
+const page = app.windows().find(w => w.url().includes('renderer/index.html')) ?? await app.firstWindow();
+const send = (ch, data) => app.evaluate(({ BrowserWindow }, [c, d]) => BrowserWindow.getAllWindows()[0].webContents.send(c, d), [ch, data]);
+const shot = async n => { await sleep(500); await page.screenshot({ path: path.join(SHOTS, `round${R}-ux-${TAG}-${n}.png`) }); };
+await shot('1-login');
+await page.evaluate(() => showScreen('dashboard'));
+await shot('2-dashboard-starting');
+await send('desktop:obs-status', { connected: true });
+await shot('3-dashboard-ready');
+await page.evaluate(() => { renderPlatforms([{ id: null, name: 'Chaturbate', username: 'model1', eventsToken: '' }]); showScreen('settings'); });
+await shot('4-settings');
+await page.evaluate(() => showScreen('dashboard'));
+await send('desktop:status-update', { live: true, bitrate: 4500, droppedFrames: 0, cpuUsage: 12 });
+await shot('5-live');
+await page.evaluate(() => document.getElementById('go-live-btn').click());
+await shot('6-click-stop');
+await app.close();

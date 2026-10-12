@@ -13,6 +13,7 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 await sleep(2500);
 const page = app.windows().find(w => w.url().includes('renderer/index.html')) ?? await app.firstWindow();
 await page.evaluate(() => showScreen('dashboard'));
+await page.evaluate(() => { const b = document.getElementById('extras'); if (!b.classList.contains('open')) document.getElementById('extras-toggle').click(); });
 await page.evaluate(() => window.api.goalSet({ title: 'Lingerie off', target: 500, enabled: true }));
 await page.evaluate(() => window.api.tipmenuSet && window.api.tipmenuSet({ text: '25 = kiss; 50 = twirl', enabled: true }));
 await page.evaluate(() => window.api.testInject('chaturbate', { method: 'tip', object: { tip: { tokens: 615 }, user: { username: 'bigspender' } } }));

@@ -15,6 +15,92 @@ function escHtml(str) {
     .replace(/>/g, '&gt;');
 }
 
+// Friendly in-app confirm (returns a Promise<boolean>). Safe choice is focused + Esc.
+let _confirmResolve = null;
+function askConfirm({ title, msg, yes = 'Yes', no = 'Keep going' }) {
+  if (_confirmResolve) _confirmResolve(false);
+  $('confirm-title').textContent = title;
+  $('confirm-msg').textContent   = msg;
+  $('confirm-yes').textContent   = yes;
+  $('confirm-no').textContent    = no;
+  $('confirm-overlay').classList.add('active');
+  $('confirm-no').focus();
+  return new Promise(res => { _confirmResolve = res; });
+}
+function _confirmDone(v) {
+  $('confirm-overlay').classList.remove('active');
+  const r = _confirmResolve; _confirmResolve = null;
+  if (r) r(v);
+}
+$('confirm-yes').addEventListener('click', () => _confirmDone(true));
+$('confirm-no').addEventListener('click',  () => _confirmDone(false));
+$('confirm-overlay').addEventListener('click', e => { if (e.target === $('confirm-overlay')) _confirmDone(false); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && _confirmResolve) _confirmDone(false); });
+
+const END_SHOW_TEXT = {
+  title: 'End your show?',
+  msg:   "You're live right now. Ending the show takes you offline on all your sites and viewers will be disconnected.",
+  yes:   'Yes, end show',
+  no:    'Keep streaming',
+};
+
+// ── Setup checklist: sites, camera, mic, studio → one clear next step ──────────
+const setup = { studio: false, destinations: [], camera: 'checking', mic: 'checking', micTimer: null };
+
+function setupItem(id, state, label) {   // state: ok | warn | bad | wait
+  const el = $('si-' + id);
+  if (!el) return;
+  el.dataset.state = state;
+  el.querySelector('.si-icon').textContent = { ok: '✓', warn: '!', bad: '✕', wait: '…', off: '–' }[state];
+  el.lastChild.textContent = label;
+}
+
+function renderSetup() {
+  const card = $('setup-card');
+  if (!card) return;
+  const dests = setup.destinations;
+  const find  = n => dests.find(d => d.name.toLowerCase() === n);
+  const cb = find('chaturbate'), sc = find('stripchat');
+  const cbTips = cb && (cb.eventsToken || cb.id === null);
+
+  setupItem('studio', setup.studio ? 'ok' : 'wait', setup.studio ? 'Studio ready' : 'Studio starting…');
+  const anySite = !!(cb || sc);
+  setupItem('chaturbate', !cb ? (anySite ? 'off' : 'bad') : cbTips ? 'ok' : 'warn', !cb ? (anySite ? 'Chaturbate not used' : 'Chaturbate not connected') : cbTips ? 'Chaturbate connected' : 'Chaturbate: tips not linked');
+  setupItem('stripchat',  !sc ? (anySite ? 'off' : 'bad') : 'ok', !sc ? (anySite ? 'Stripchat not used' : 'Stripchat not connected') : 'Stripchat connected');
+  setupItem('camera', setup.camera === 'ok' ? 'ok' : setup.camera === 'bad' ? 'bad' : 'wait',
+            setup.camera === 'ok' ? 'Camera working' : setup.camera === 'bad' ? 'No camera found' : 'Checking camera…');
+  setupItem('mic', setup.mic === 'ok' ? 'ok' : setup.mic === 'bad' ? 'bad' : 'wait',
+            setup.mic === 'ok' ? 'Microphone ready' : setup.mic === 'bad' ? 'No microphone found' : 'Checking microphone…');
+
+  // The one next step, most important first.
+  let text, action = null, toSettings = true, state = 'todo';
+  if (isStreaming) { card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  if (!dests.length)              { text = 'Step 1: connect the site you stream on'; action = 'Connect my site'; }
+  else if (!setup.studio)         { text = 'Starting your studio… this takes about a minute'; state = 'wait'; }
+  else if (setup.camera === 'bad'){ text = 'We can’t see your camera. Plug it in, then try again'; action = 'Try camera again'; toSettings = false; }
+  else if (setup.mic === 'bad')   { text = 'We can’t find your microphone. Plug it in and restart the app'; state = 'bad'; }
+  else if (cb && !cbTips)         { text = 'Almost there: link Chaturbate so your tips and chat show up'; action = 'Link tips & chat'; state = 'warn'; }
+  else if (setup.camera !== 'ok' || setup.mic !== 'ok') { text = 'Checking your camera and microphone…'; state = 'wait'; }
+  else                            { text = 'You’re all set! Press GO LIVE when you’re ready'; state = 'ready'; }
+
+  card.dataset.state = state;
+  $('setup-headline').textContent = text;
+  const btn = $('setup-action');
+  btn.hidden = !action;
+  if (action) { btn.textContent = action; btn.dataset.settings = toSettings ? '1' : ''; }
+}
+
+async function refreshSetup() {
+  try { setup.destinations = (await window.api.getDestinations()).destinations || []; } catch {}
+  renderSetup();
+}
+
+$('setup-action').addEventListener('click', () => {
+  if ($('setup-action').dataset.settings) $('settings-btn').click();
+  else { setup.camera = 'checking'; renderSetup(); initCamera(); }
+});
+
 // ── Titlebar close ────────────────────────────────────────────────────────────
 $('close-btn').addEventListener('click', () => window.close());
 
@@ -29,20 +115,29 @@ window.api.onObsStatus(({ connected, status, error }) => {
 
   if (connected) {
     dot.className      = 'obs-dot connected';
-    label.textContent  = 'OBS ✓';
+    label.textContent  = 'Studio ready';
     $('go-live-btn').disabled    = false;
-    $('live-status').textContent = isStreaming ? 'Live' : 'Ready';
+    $('live-status').textContent = isStreaming ? 'You’re live' : 'Ready when you are';
+    setup.studio = true;
+    // Mic check: OBS answers with the mute state when it found the microphone
+    if (setup.mic !== 'ok' && !setup.micTimer) setup.micTimer = setTimeout(() => {
+      setup.micTimer = null;
+      if (setup.mic !== 'ok') { setup.mic = 'bad'; renderSetup(); }
+    }, 12000);
   } else if (error && !status) {
     dot.className      = 'obs-dot error';
-    label.textContent  = 'OBS ✗';
+    label.textContent  = 'Studio problem';
     $('go-live-btn').disabled    = true;
     $('live-status').textContent = error;
+    setup.studio = false;
   } else {
     dot.className      = 'obs-dot booting';
-    label.textContent  = 'OBS';
+    label.textContent  = 'Studio starting…';
     $('go-live-btn').disabled    = true;
-    $('live-status').textContent = status || 'Starting OBS…';
+    $('live-status').textContent = status || 'Starting your studio…';
+    setup.studio = false;
   }
+  renderSetup();
 });
 
 // ── Status polling ────────────────────────────────────────────────────────────
@@ -54,14 +149,17 @@ window.api.onStatusUpdate(({ live, bitrate, droppedFrames, cpuUsage }) => {
 
   const btn = $('go-live-btn');
   if (live) {
-    btn.textContent = 'STOP';
+    btn.textContent = 'END SHOW';
     btn.classList.add('live');
-    $('live-status').textContent = 'Live';
+    $('live-status').textContent = 'You’re live';
+    $('cam-btn').disabled = true;
   } else {
     btn.textContent = 'GO LIVE';
     btn.classList.remove('live');
-    if (obsConnected) $('live-status').textContent = 'Ready';
+    $('cam-btn').disabled = false;
+    if (obsConnected) $('live-status').textContent = 'Ready when you are';
   }
+  renderSetup();
 });
 
 // ── Stream error ──────────────────────────────────────────────────────────────
@@ -101,6 +199,7 @@ $('sc-modal-open').addEventListener('click', () => {
 // ── Go Live / Stop ────────────────────────────────────────────────────────────
 $('go-live-btn').addEventListener('click', async () => {
   const btn = $('go-live-btn');
+  if (isStreaming && !(await askConfirm(END_SHOW_TEXT))) return;   // a mis-click can't end a live show
   btn.disabled = true;
   let result;
   try {
@@ -131,7 +230,7 @@ $('go-live-btn').addEventListener('click', async () => {
     const prefix = result.stage === 'stripchat' ? '[Stripchat] ' : '';
     $('live-status').textContent = prefix + (result.error || 'Failed');
   } else if (result.stripchatManual) {
-    $('live-status').textContent = 'Live — open SC panel to start show';
+    $('live-status').textContent = 'You’re live — click the SC button (top left) and press Start Show on Stripchat';
     if (result.openPanel) window.api.toggleBroadcastView();
   }
   btn.disabled = !obsConnected;
@@ -211,8 +310,11 @@ async function initCamera() {
     const vid = $('camera-preview');
     vid.srcObject = cameraStream;
     $('camera-placeholder').style.display = 'none';
+    setup.camera = 'ok'; renderSetup();
   } catch {
     $('camera-placeholder').style.display = 'flex';
+    setup.camera = 'bad'; renderSetup();
+    setCameraPlaceholder('No camera found.<br>Plug in your webcam, then click “Try camera again” above.');
   }
 }
 
@@ -350,7 +452,8 @@ if ($('goal-bar')) {
   }
   $('goal-toggle').addEventListener('click', () => { goalEnabled = !goalEnabled; saveGoal(); });
   $('goal-reset').addEventListener('click', () => {
-    if (confirm('Start a new show? This sets the goal total and top tipper back to 0.')) window.api.goalReset().then(renderGoal).catch(() => {});
+    askConfirm({ title: 'Start a new show?', msg: 'This sets your goal total and top tipper back to 0.', yes: 'Yes, reset', no: 'Cancel' })
+      .then(ok => ok && window.api.goalReset().then(renderGoal).catch(() => {}));
   });
   window.api.onGoalUpdate(renderGoal);
   window.api.goalGet().then(renderGoal).catch(() => {});
@@ -392,10 +495,10 @@ $('platform-sidebar').addEventListener('click', async e => {
   const allOff = destinations.every(d => disabledIds.includes(String(d.id)));
   if (allOff) {
     $('go-live-btn').disabled = true;
-    $('live-status').textContent = 'Enable at least one platform';
+    $('live-status').textContent = 'Switch on at least one site on the left';
   } else if (obsConnected && !isStreaming) {
     $('go-live-btn').disabled = false;
-    $('live-status').textContent = 'Ready';
+    $('live-status').textContent = 'Ready when you are';
   }
   btn.disabled = false;
 });
@@ -413,12 +516,12 @@ function applyChatStatus({ stripchat, chaturbate }) {
     const notice = document.createElement('div');
     notice.id        = 'chat-waiting';
     notice.className = 'chat-empty';
-    notice.textContent = 'Chat connected — waiting for messages…';
+    notice.textContent = 'Chat is connected. Messages and tips will show up here.';
     box.insertBefore(notice, box.firstChild);
   } else if (chaturbate?.username && !chaturbate?.hasToken) {
-    chatEmpty.textContent = 'Add your Chaturbate Events API token in Settings to see live chat.';
+    chatEmpty.textContent = 'Chaturbate is connected, but your chat and tips aren’t linked yet. Click Settings → Chaturbate → paste your chat code to see them here.';
   } else {
-    chatEmpty.textContent = 'Add a streaming platform in Settings to see live chat.';
+    chatEmpty.textContent = 'Connect Chaturbate or Stripchat to see your chat and tips here. Click Settings at the top.';
   }
 }
 
@@ -487,7 +590,9 @@ let micMuted = false;
 function setMuteUI(muted) {
   micMuted = muted;
   const btn = $('mute-btn');
-  $('mute-label').textContent = muted ? 'MUTED' : 'MIC';
+  $('mute-label').textContent = muted ? 'MIC MUTED' : 'MIC ON';
+  $('mute-btn').title = muted ? 'Your microphone is OFF — click to turn it on (M)' : 'Your microphone is on — click to mute (M)';
+  setup.mic = 'ok'; renderSetup();
   $('mute-icon').textContent  = muted ? '✕' : '●';
   btn.classList.toggle('control-off', muted);
 }
@@ -513,7 +618,7 @@ let camOff = false;
 
 function setCamUI(off) {
   camOff = off;
-  $('cam-label').textContent = off ? 'OFF' : 'CAM';
+  $('cam-label').textContent = off ? 'PREVIEW OFF' : 'PREVIEW ON';
   $('cam-icon').textContent  = off ? '✕' : '●';
   $('cam-btn').classList.toggle('control-off', off);
 }
@@ -629,8 +734,8 @@ $('login-form').addEventListener('submit', async e => {
     enterAdminMode();
   } else if (result.ok) {
     showScreen('dashboard');
-    showStartupBar();
-    $('live-status').textContent = 'Connecting to OBS…';
+    resetSetup();
+    $('live-status').textContent = 'Getting your studio ready…';
     initCamera();
     refreshChatStatus();
     const { destinations, disabledIds } = await window.api.getDestinations();
@@ -652,16 +757,17 @@ const PLATFORMS = [
     id:             'chaturbate',
     label:          'Chaturbate',
     rtmpUrl:        'rtmp://global.live.mmcdn.com/live-origin',
-    keyHint:        'chaturbate.com → Broadcast Yourself → External Software',
+    keyHint:        'On chaturbate.com click Broadcast Yourself, then External Software',
     hasUsername:    true,
     hasEventsToken: true,
-    eventsHint:     'chaturbate.com → Broadcast Yourself → External Software → Events API Token',
+    eventsHint:     'Paste your chat code here',
+    eventsHelp:     'Shows your tips and chat inside this app. On chaturbate.com open Broadcast Yourself → External Software and copy the code called “Events API token”.',
   },
   {
     id:             'stripchat',
     label:          'Stripchat',
     rtmpUrl:        'rtmp://live.doppiocdn.com/ext',
-    keyHint:        'stripchat.com → Go Live → External Software → Stream key (Token)',
+    keyHint:        'On stripchat.com click Go Live, then External Software, and copy the Stream key',
     usernameHint:   'Your Stripchat model username',
     hasUsername:    true,
     hasEventsToken: false,
@@ -674,7 +780,7 @@ function renderPlatforms(destinations) {
 
   const noticeBanner = !hasOwnDests && destinations.length > 0
     ? `<div class="platform-notice">
-         Streaming to the agency default destination. Add your own stream key to use your personal channel.
+         You’re streaming with your agency’s shared setup. To stream to your own page instead, add your stream key below.
        </div>`
     : '';
 
@@ -689,8 +795,9 @@ function renderPlatforms(destinations) {
       const eventsSection = p.hasEventsToken ? `
         <div class="platform-events">
           <label style="font-size:9px;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--muted);">
-            Live Chat Token
+            Show my tips &amp; chat here
           </label>
+          <span class="key-hint">${p.eventsHelp || ''}</span>
           <div class="key-wrap" style="margin-top:6px;">
             <input type="password" id="evtok-${p.id}"
                    value="${escHtml(existing.eventsToken || '')}"
@@ -701,14 +808,14 @@ function renderPlatforms(destinations) {
           <button class="btn btn-ghost platform-evtsave-btn"
                   data-id="${existing.id}" data-platform="${p.id}"
                   style="width:100%;margin-top:8px;">
-            ${existing.eventsToken ? 'Update Token' : 'Connect Chat'}
+            ${existing.eventsToken ? 'Update chat code' : 'Save chat code'}
           </button>
         </div>` : '';
 
       // Show username field when platform needs one but it's missing (e.g. Stripchat without username)
       const missingUsername = p.hasUsername && !existing.username ? `
         <div class="platform-missing-username">
-          <span class="missing-uname-label">⚠ Username needed for auto-start</span>
+          <span class="missing-uname-label">⚠ Type your username so we can start your show for you</span>
           <div class="field" style="margin-top:6px;">
             <input type="text" id="uname-edit-${p.id}"
                    placeholder="${escHtml(p.usernameHint || 'Your username')}" autocomplete="off" />
@@ -720,7 +827,7 @@ function renderPlatforms(destinations) {
 
       // Default (null-id) rows are read-only — show badge, no Remove button
       const actionRow = isDefault
-        ? `<span class="platform-badge-default" style="display:block;padding:0 16px 14px;">Agency default</span>`
+        ? `<span class="platform-badge-default" style="display:block;padding:0 16px 14px;">Set up by your agency</span>`
         : `<button class="btn platform-remove-btn" data-id="${existing.id}">Remove</button>`;
 
       return `
@@ -753,20 +860,20 @@ function renderPlatforms(destinations) {
         <div class="platform-form">
           ${usernameField}
           <div class="field">
-            <label for="key-${p.id}">Stream Key</label>
+            <label for="key-${p.id}">Stream key <span class="label-sub">(a secret code that lets this app go live for you)</span></label>
             <div class="key-wrap">
               <input type="password" id="key-${p.id}"
                      placeholder="Paste your stream key" autocomplete="off" />
               <button class="btn btn-icon key-toggle"
                       data-target="key-${p.id}" type="button">&#128065;</button>
             </div>
-            <span class="key-hint">Find it at: ${p.keyHint}</span>
+            <span class="key-hint">Where to find it: ${p.keyHint}</span>
           </div>
           <p class="error-msg platform-err" id="err-${p.id}"></p>
           <button class="btn btn-primary platform-add-btn"
                   data-platform="${p.id}"
                   data-rtmp="${p.rtmpUrl}"
-                  data-label="${p.label}">Add ${p.label}</button>
+                  data-label="${p.label}">Connect ${p.label}</button>
         </div>
       </div>`;
   }).join('');
@@ -782,11 +889,11 @@ async function refreshScStatus() {
   const card   = $('sc-connection-card');
   if (loggedIn) {
     dot.className       = 'connection-dot connected';
-    status.textContent  = 'Connected';
+    status.textContent  = 'Logged in ✓';
     card.classList.add('is-connected');
   } else {
     dot.className       = 'connection-dot';
-    status.textContent  = 'Not connected — open panel to log in';
+    status.textContent  = 'Not logged in yet — click the button to log in';
     card.classList.remove('is-connected');
   }
 }
@@ -810,7 +917,11 @@ $('settings-btn').addEventListener('click', async () => {
 
 $('check-updates-btn').addEventListener('click', () => window.api.checkForUpdates());
 
-$('settings-back-btn').addEventListener('click', () => { showScreen('dashboard'); refreshChatStatus(); });
+$('settings-back-btn').addEventListener('click', async () => {
+  showScreen('dashboard'); refreshChatStatus();
+  try { const { destinations, disabledIds } = await window.api.getDestinations(); renderPlatformSidebar(destinations, disabledIds); } catch {}
+  refreshSetup();
+});
 
 $('platform-list').addEventListener('click', async e => {
   // Show / hide key
@@ -846,7 +957,8 @@ $('platform-list').addEventListener('click', async e => {
     const result = await window.api.setEventsToken(evtSave.dataset.id, token);
     evtSave.disabled = false;
     if (result.ok) {
-      evtSave.textContent = token ? 'Update Token' : 'Connect Chat';
+      evtSave.textContent = token ? 'Update chat code' : 'Save chat code';
+      refreshSetup();
     }
     return;
   }
@@ -874,8 +986,8 @@ $('platform-list').addEventListener('click', async e => {
     const username    = unameInput?.value.trim() || '';
     errEl.textContent = '';
 
-    if (platform?.hasUsername && !username) { errEl.textContent = 'Username is required.'; return; }
-    if (!streamKey) { errEl.textContent = 'Stream key is required.'; return; }
+    if (platform?.hasUsername && !username) { errEl.textContent = 'Please type your ' + platform.label + ' username.'; return; }
+    if (!streamKey) { errEl.textContent = 'Please paste your stream key (see where to find it below the box).'; return; }
 
     addBtn.disabled = true;
     const result = await window.api.addDestination({
@@ -888,12 +1000,20 @@ $('platform-list').addEventListener('click', async e => {
   }
 });
 
+function resetSetup() {
+  clearTimeout(setup.micTimer);
+  Object.assign(setup, { studio: obsConnected, camera: 'checking', mic: 'checking', micTimer: null });
+  refreshSetup();
+}
+
 // ── Logout ────────────────────────────────────────────────────────────────────
 $('logout-btn').addEventListener('click', async () => {
+  if (isStreaming && !(await askConfirm({ ...END_SHOW_TEXT, title: 'Log out and end your show?', yes: 'Yes, log out' }))) return;
   stopProgramPreview();
   stopCamera();
   hideStartupBar();
   await window.api.logout();
+  resetSetup();
   isStreaming = false;
   obsConnected = false;
   $('go-live-btn').disabled    = true;
@@ -1057,8 +1177,8 @@ async function submitCreateAccount() {
   if (login.ok && !login.admin) {
     $('admin-create-overlay').classList.remove('active');
     showScreen('dashboard');
-    showStartupBar();
-    $('live-status').textContent = 'Connecting to OBS…';
+    resetSetup();
+    $('live-status').textContent = 'Getting your studio ready…';
     initCamera();
     refreshChatStatus();
     const { destinations, disabledIds } = await window.api.getDestinations();
@@ -1175,8 +1295,8 @@ $('ad-open-as').addEventListener('click', async () => {
     clearInterval(adminInterval); adminInterval = null;
     $('admin-detail-overlay').classList.remove('active');
     showScreen('dashboard');
-    showStartupBar();
-    $('live-status').textContent = 'Connecting to OBS…';
+    resetSetup();
+    $('live-status').textContent = 'Getting your studio ready…';
     initCamera();
     refreshChatStatus();
     const { destinations, disabledIds } = await window.api.getDestinations();
@@ -1329,8 +1449,8 @@ document.addEventListener('keydown', e => {
   const token = await window.api.getToken();
   if (token) {
     showScreen('dashboard');
-    showStartupBar();
-    $('live-status').textContent = 'Connecting to OBS…';
+    resetSetup();
+    $('live-status').textContent = 'Getting your studio ready…';
     initCamera();
     refreshChatStatus();
     const { destinations, disabledIds } = await window.api.getDestinations();
@@ -1471,3 +1591,28 @@ async function initToys() {
   });
 }
 initToys();
+
+// ── Extras (promo / goal / menu / toys) are tucked away until wanted ───────────
+(function () {
+  const t = $('extras-toggle'), box = $('extras');
+  if (!t || !box) return;
+  const paint = open => {
+    box.classList.toggle('open', open);
+    t.setAttribute('aria-expanded', String(open));
+    $('extras-arrow').textContent = open ? '▾' : '▸';
+  };
+  let open = false;
+  try { open = localStorage.getItem('tmt.extras') === '1'; } catch {}
+  paint(open);
+  t.addEventListener('click', () => {
+    open = !box.classList.contains('open');
+    paint(open);
+    try { localStorage.setItem('tmt.extras', open ? '1' : '0'); } catch {}
+  });
+})();
+
+// Closing the window (X, Alt+F4) while live: main process blocks it and asks us first.
+window.api.onConfirmClose(async () => {
+  const ok = await askConfirm({ ...END_SHOW_TEXT, title: 'Close the app and end your show?', yes: 'Yes, close & end show' });
+  if (ok) window.api.forceClose();
+});

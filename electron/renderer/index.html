@@ -73,34 +73,26 @@
       <div class="dash-header-right">
         <div class="obs-badge">
           <div class="obs-dot" id="obs-dot"></div>
-          <span id="obs-label">OBS</span>
+          <span id="obs-label">Studio</span>
         </div>
-        <button class="btn btn-icon" id="debug-btn" title="Debug panel (Ctrl+D)">&#62;_</button>
-        <button class="btn btn-icon" id="settings-btn" title="Stream platforms">&#9881;</button>
+        <button class="btn btn-icon" id="debug-btn" title="Support info (Ctrl+D)" hidden>&#62;_</button>
+        <button class="btn btn-ghost" id="settings-btn" title="Connect your sites, stream keys">&#9881; Settings</button>
         <button class="btn btn-ghost" id="logout-btn">Log out</button>
       </div>
     </div>
 
-    <!-- Startup progress bar — shown after login, auto-hides once all steps done -->
-    <div id="startup-bar" class="startup-bar">
-      <div class="startup-step" id="ss-obs">
-        <span class="ss-icon" data-status="pending">·</span>
-        <span class="ss-label">OBS</span>
+    <!-- First-run / ready checklist: always says the ONE next thing to do -->
+    <div id="setup-card" class="setup-card">
+      <div class="setup-top">
+        <div class="setup-headline" id="setup-headline">Getting things ready…</div>
+        <button class="btn btn-primary setup-action" id="setup-action" hidden>Connect now</button>
       </div>
-      <span class="ss-sep">›</span>
-      <div class="startup-step" id="ss-session">
-        <span class="ss-icon" data-status="pending">·</span>
-        <span class="ss-label">Session</span>
-      </div>
-      <span class="ss-sep">›</span>
-      <div class="startup-step" id="ss-broadcast">
-        <span class="ss-icon" data-status="pending">·</span>
-        <span class="ss-label">Broadcast</span>
-      </div>
-      <span class="ss-sep">›</span>
-      <div class="startup-step" id="ss-chat">
-        <span class="ss-icon" data-status="pending">·</span>
-        <span class="ss-label">Chat</span>
+      <div class="setup-items" id="setup-items">
+        <span class="setup-item" id="si-studio"><span class="si-icon">·</span>Studio</span>
+        <span class="setup-item" id="si-chaturbate"><span class="si-icon">·</span>Chaturbate</span>
+        <span class="setup-item" id="si-stripchat"><span class="si-icon">·</span>Stripchat</span>
+        <span class="setup-item" id="si-camera"><span class="si-icon">·</span>Camera</span>
+        <span class="setup-item" id="si-mic"><span class="si-icon">·</span>Microphone</span>
       </div>
     </div>
 
@@ -118,6 +110,10 @@
           </div>
         </div>
 
+        <button class="extras-toggle" id="extras-toggle" aria-expanded="false">
+          <span id="extras-arrow">&#9656;</span> Extras: promo text, tip goal, tip menu, toys
+        </button>
+        <div class="extras" id="extras">
         <!-- Promo overlay bar — type socials text, flip switch to show on stream -->
         <div class="promo-bar">
           <span class="promo-label">&#128226; PROMO</span>
@@ -133,7 +129,7 @@
         <div class="promo-bar goal-bar" id="goal-bar">
           <span class="promo-label">&#127942; GOAL</span>
           <input id="goal-title" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Goal name" />
-          <input id="goal-target" type="number" min="1" max="1000000" class="goal-target" title="Goal in tokens" />
+          <input id="goal-target" type="number" min="1" max="1000000" class="goal-target" title="Goal in tokens" aria-label="Goal in tokens" />
           <div class="goal-track" title="Tokens tipped this show"><div class="goal-fill" id="goal-fill"></div><span class="goal-text" id="goal-text">0 / 1000</span></div>
           <button id="goal-reset" class="btn btn-ghost" title="Start a new show: set the total back to 0">Reset</button>
           <button id="goal-toggle" class="promo-toggle" title="Show the goal on your stream">
@@ -195,11 +191,15 @@
             </div>
           </div>
         </div>
+        </div><!-- /extras -->
       </div>
 
       <!-- Platform toggles sidebar -->
+      <div class="platform-sidebar-wrap">
+      <div class="plat-heading">LIVE ON</div>
       <div class="platform-sidebar" id="platform-sidebar">
         <!-- populated by JS -->
+      </div>
       </div>
 
       <!-- Chat -->
@@ -212,7 +212,7 @@
         </div>
         <div class="chat-messages" id="chat-messages">
           <div class="chat-empty" id="chat-empty">
-            Add your Events API token in Settings to see live chat.
+            Connect Chaturbate or Stripchat to see your chat and tips here.
           </div>
         </div>
       </div>
@@ -223,30 +223,30 @@
     <div class="dash-footer">
       <div class="footer-live">
         <button class="btn-live" id="go-live-btn" disabled>GO LIVE</button>
-        <p class="btn-live-status" id="live-status">Waiting for OBS</p>
+        <p class="btn-live-status" id="live-status">Getting your studio ready…</p>
       </div>
       <div class="footer-controls">
         <button class="btn-control" id="mute-btn" title="Toggle microphone (M)">
           <span class="control-icon" id="mute-icon">&#9679;</span>
-          <span class="control-label" id="mute-label">MIC</span>
+          <span class="control-label" id="mute-label">MIC ON</span>
         </button>
-        <button class="btn-control" id="cam-btn" title="Toggle camera (V)">
+        <button class="btn-control" id="cam-btn" title="Show or hide the preview on this screen (viewers still see you)">
           <span class="control-icon" id="cam-icon">&#9679;</span>
-          <span class="control-label" id="cam-label">CAM</span>
+          <span class="control-label" id="cam-label">PREVIEW ON</span>
         </button>
       </div>
       <div class="footer-stats">
         <div class="stat-card">
           <div class="stat-value" id="stat-bitrate">—</div>
-          <div class="stat-label">kbps</div>
+          <div class="stat-label">Upload speed (kbps)</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="stat-dropped">—</div>
-          <div class="stat-label">Dropped</div>
+          <div class="stat-label">Lost frames</div>
         </div>
         <div class="stat-card">
           <div class="stat-value" id="stat-cpu">—</div>
-          <div class="stat-label">CPU %</div>
+          <div class="stat-label">Computer load %</div>
         </div>
       </div>
     </div>
@@ -260,25 +260,26 @@
 
     <div class="settings-header">
       <button class="btn btn-icon" id="settings-back-btn" title="Back">&#8592;</button>
-      <span class="settings-title">STREAM PLATFORMS</span>
+      <span class="settings-title">CONNECT YOUR SITES</span>
     </div>
 
+    <p class="settings-intro">Connect each site you stream on. When you&rsquo;re done, press the back arrow and hit <strong>GO LIVE</strong>.</p>
     <!-- Connections (platform logins) -->
-    <div class="settings-section-label">CONNECTIONS</div>
+    <div class="settings-section-label">STEP 1 &middot; LOG IN</div>
     <div class="connection-card" id="sc-connection-card">
       <div class="connection-row">
         <div class="connection-info">
           <span class="connection-dot" id="sc-conn-dot"></span>
           <div class="connection-text">
-            <span class="connection-name">Stripchat</span>
+            <span class="connection-name">Stripchat login</span>
             <span class="connection-status" id="sc-conn-status">Checking…</span>
           </div>
         </div>
-        <button class="btn btn-ghost" id="sc-open-btn">Open Panel</button>
+        <button class="btn btn-ghost" id="sc-open-btn">Log in to Stripchat</button>
       </div>
     </div>
 
-    <div class="settings-section-label" style="margin-top:8px">STREAM PLATFORMS</div>
+    <div class="settings-section-label settings-label-2">STEP 2 &middot; ADD YOUR STREAM KEYS</div>
     <div class="platform-list" id="platform-list">
       <!-- populated by JS -->
     </div>
@@ -399,6 +400,18 @@
       </div>
       <p class="admin-detail-msg" id="ac-msg"></p>
       <button class="btn btn-primary" id="ac-create" style="margin-top:14px;">Create account</button>
+    </div>
+  </div>
+
+  <!-- Generic confirm dialog (end show, close while live, log out…) -->
+  <div id="confirm-overlay" class="sc-modal-overlay">
+    <div class="sc-modal" role="alertdialog" aria-labelledby="confirm-title">
+      <div class="sc-modal-header"><span class="sc-modal-title" id="confirm-title">Are you sure?</span></div>
+      <div class="sc-modal-body"><p class="sc-modal-msg" id="confirm-msg"></p></div>
+      <div class="sc-modal-footer">
+        <button class="btn btn-ghost sc-modal-dismiss" id="confirm-no">Keep going</button>
+        <button class="btn btn-danger sc-modal-open" id="confirm-yes">Yes</button>
+      </div>
     </div>
   </div>
 
