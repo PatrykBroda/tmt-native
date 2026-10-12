@@ -1664,3 +1664,5 @@ input::placeholder { color: var(--border-hi); }
   background: none; border: none; color: var(--muted); cursor: pointer; font-size: 14px; padding: 0 4px;
 }
 .toy-level-x:hover { color: var(--red); }
+.toy-row input.toy-num, .toy-level input.toy-num { width: 54px; flex: 0 0 auto; }
+.toy-chk { white-space: nowrap; }
