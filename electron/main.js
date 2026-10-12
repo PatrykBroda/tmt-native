@@ -131,7 +131,8 @@ function startAutoFixer() {
   stopAutoFixer();
   lastScChatEventMs = 0;
   chatFixInterval = setInterval(async () => {
-    if (!scView || !storedToken) return;
+   try {
+    if (!scView || scView.webContents.isDestroyed() || !storedToken) return;
     const url = scView.webContents.getURL();
     // Guard 1: SC view drifted off stripchat.com → redirect back
     if (url && url.startsWith('http') && !url.includes('stripchat.com')) {
@@ -155,6 +156,9 @@ function startAutoFixer() {
         scLog('[sc-chat] auto-fix inject error: ' + e.message);
       }
     }
+   } catch (e) {
+    logger.warn('[auto-fix] tick failed', { error: e.message });
+   }
   }, 30_000);
 }
 
@@ -442,13 +446,20 @@ async function startViewerCountPolling() {
   const scDest = streamDestinations.find(d => d.username && d.name.toLowerCase() === 'stripchat');
   if (!cbDest && !scDest) return;
 
+  let polling = false;
   const poll = async () => {
+    if (polling) return;          // previous tick still running (slow network)
+    polling = true;
+    try { await pollOnce(); } finally { polling = false; }
+  };
+  const pollOnce = async () => {
     let total = 0;
     let got   = false;
     try {
       if (cbDest) {
         const res = await fetch(
-          `https://chaturbate.com/api/public/affiliates/onlinerooms/?wm=0&format=json&username=${encodeURIComponent(cbDest.username)}`
+          `https://chaturbate.com/api/public/affiliates/onlinerooms/?wm=0&format=json&username=${encodeURIComponent(cbDest.username)}`,
+          { signal: AbortSignal.timeout(10000) }
         );
         if (res.ok) {
           const data = await res.json();
@@ -465,7 +476,7 @@ async function startViewerCountPolling() {
       if (scDest) {
         const res = await fetch(
           `https://stripchat.com/api/front/v2/models/username/${encodeURIComponent(scDest.username.toLowerCase())}`,
-          { headers: { Accept: 'application/json' } }
+          { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(10000) }
         );
         if (res.ok) {
           const data = await res.json();
@@ -1065,8 +1076,10 @@ async function connectObs(wsPassword) {
 // ── Status polling ────────────────────────────────────────────────────────────
 function startStatusPolling(token) {
   if (statusInterval) return;
+  let inFlight = false;
   statusInterval = setInterval(async () => {
-    if (!obsClient || !token) return;
+    if (!obsClient || !token || inFlight) return;   // skip if OBS is slow to answer
+    inFlight = true;
     try {
       const stream = await obsClient.call('GetStreamStatus');
 
@@ -1099,6 +1112,8 @@ function startStatusPolling(token) {
       }
     } catch (err) {
       console.debug('[poll]', err.message);
+    } finally {
+      inFlight = false;
     }
   }, STATUS_INTERVAL_MS);
 }
