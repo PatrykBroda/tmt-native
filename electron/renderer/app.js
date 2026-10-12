@@ -1474,14 +1474,14 @@ function renderToyStatus(st) {
   $('toy-dot').className = 'toy-dot ' + (st.state === 'connected' ? 'connected' : st.state === 'connecting' ? 'connecting' : '');
   const n = st.devices.length;
   $('toy-status').textContent =
-    st.state === 'connected'  ? (n ? `Connected · ${n} toy${n === 1 ? '' : 's'}` : 'Connected · no toys yet')
+    st.state === 'connected'  ? (n ? `Connected · ${n} toy${n === 1 ? '' : 's'}` : 'Connected, but no toy found yet')
     : st.state === 'connecting' ? 'Connecting…'
-    : (st.error ? 'Disconnected — ' + st.error : 'Not connected');
+    : (st.error ? "Couldn't connect — " + st.error : 'Not connected');
   $('toy-connect').textContent = st.state === 'disconnected' ? 'Connect' : 'Disconnect';
   const dev = $('toy-devices');
   dev.classList.toggle('has', n > 0);
   dev.textContent = n ? st.devices.map(d => d.name + (d.canVibrate ? '' : ' (no vibrate)')).join(' · ')
-    : (st.state === 'connected' ? 'Connected, but no toys found — switch the toy on / pair it in Intiface.' : 'No toys connected.');
+    : (st.state === 'connected' ? 'Connected, but no toy found — switch your toy on and pair it in Intiface.' : 'No toy connected yet. Switch your toy on, open Intiface (or Lovense Remote), then press Connect.');
   const now = $('toy-now');
   clearInterval(toyUI.tick);
   if (st.playing) {

@@ -1770,3 +1770,13 @@ input::placeholder { color: var(--border-hi); }
 .platform-card { flex-shrink: 0; }
 
 .login-help { margin: 10px 0 0; font-size: 12px; color: var(--muted); text-align: center; }
+
+/* ── Small-window polish (r14): extras never scroll sideways, bars wrap, dark scrollbars ── */
+.extras { overflow-x: hidden; }
+.extras .promo-bar { flex-wrap: wrap; }
+.extras .toy-row { flex-wrap: wrap; }
+.extras .toy-chk { white-space: normal; }
+.extras input[type="text"] { min-width: 0; }
+.extras::-webkit-scrollbar, .toy-body::-webkit-scrollbar, .settings-body::-webkit-scrollbar { width: 8px; height: 8px; }
+.extras::-webkit-scrollbar-thumb { background: var(--border-mid); border-radius: 4px; }
+.extras::-webkit-scrollbar-track { background: transparent; }
