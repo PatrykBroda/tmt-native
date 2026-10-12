@@ -73,12 +73,12 @@ function renderSetup() {
             setup.mic === 'ok' ? 'Microphone ready' : setup.mic === 'bad' ? 'No microphone found' : 'Checking microphone…');
 
   // The one next step, most important first.
-  let text, action = null, toSettings = true, state = 'todo';
+  let text, action = null, toSettings = true, kind = '', state = 'todo';
   if (isStreaming) { card.classList.add('hidden'); return; }
   card.classList.remove('hidden');
   if (!dests.length)              { text = 'Step 1: connect the site you stream on'; action = 'Connect my site'; }
   else if (!setup.studio)         { text = 'Starting your studio… this takes about a minute'; state = 'wait'; }
-  else if (sc && setup.scLoggedIn === false) { text = 'Log in to Stripchat so your chat and tips show up'; action = 'Log in to Stripchat'; state = 'warn'; }
+  else if (sc && setup.scLoggedIn === false) { text = 'Log in to Stripchat so your chat and tips show up'; action = 'Log in to Stripchat'; toSettings = false; kind = 'sc-login'; state = 'warn'; }
   else if (setup.camera === 'bad'){ text = 'We can’t see your camera. Plug it in, then try again'; action = 'Try camera again'; toSettings = false; }
   else if (setup.mic === 'bad')   { text = 'We can’t find your microphone. Plug it in and restart the app'; state = 'bad'; }
   else if (cb && !cbTips)         { text = 'Almost there: link Chaturbate so your tips and chat show up'; action = 'Link tips & chat'; state = 'warn'; }
@@ -89,7 +89,7 @@ function renderSetup() {
   $('setup-headline').textContent = text;
   const btn = $('setup-action');
   btn.hidden = !action;
-  if (action) { btn.textContent = action; btn.dataset.settings = toSettings ? '1' : ''; }
+  if (action) { btn.textContent = action; btn.dataset.settings = toSettings ? '1' : ''; btn.dataset.kind = kind; }
 }
 
 async function refreshSetup() {
@@ -99,6 +99,12 @@ async function refreshSetup() {
 }
 
 $('setup-action').addEventListener('click', () => {
+  if ($('setup-action').dataset.kind === 'sc-login') {
+    // open the Stripchat page right away (don't toggle it closed if it's already showing)
+    if (!$('broadcast-btn').classList.contains('active')) $('broadcast-btn').click();
+    setTimeout(refreshSetup, 20000);
+    return;
+  }
   if ($('setup-action').dataset.settings) $('settings-btn').click();
   else { setup.camera = 'checking'; renderSetup(); initCamera(); }
 });
