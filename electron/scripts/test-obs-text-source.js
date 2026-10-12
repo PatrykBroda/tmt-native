@@ -17,7 +17,7 @@ const names = o => o.calls.map(c => c[0]);
   const base = { name: 'X', text: 'hi', enabled: true, alignment: 5, x: 1, y: 2 };
   let o = fakeObs();
   assert.strictEqual(await ensureTextSource(o, base), true);
-  assert.deepStrictEqual(names(o), ['GetInputKindList','GetCurrentProgramScene','GetSceneItemList','CreateInput','SetSceneItemTransform','SetInputSettings','SetSceneItemEnabled']);
+  assert.deepStrictEqual(names(o), ['GetInputKindList','GetVideoSettings','GetCurrentProgramScene','GetSceneItemList','CreateInput','SetSceneItemTransform','SetInputSettings','SetSceneItemEnabled']);
   assert.strictEqual(o.calls.find(c => c[0]==='SetInputSettings')[1].inputSettings.text, 'hi');
   // existing item: no create
   o = fakeObs({ items: [{ sourceName: 'X', sceneItemId: 3 }] });
@@ -36,6 +36,14 @@ const names = o => o.calls.map(c => c[0]);
   assert.strictEqual(await ensureTextSource(fakeObs({ kinds: [] }), base), false);
   assert.strictEqual(await ensureTextSource(fakeObs({ failOn: 'SetInputSettings' }), base), false);
   assert.strictEqual(await ensureTextSource(null, base), false);
+  // scales to canvas (720p = 2/3) and survives GetVideoSettings failing
+  o = fakeObs(); const oc = o.call; o.call = async (m,p) => m==='GetVideoSettings' ? { baseWidth: 1280, baseHeight: 720 } : oc(m,p);
+  await ensureTextSource(o, { ...base, x: 1920, y: 300, size: 60 });
+  const tr = o.calls.find(c => c[0]==='SetSceneItemTransform')[1].sceneItemTransform;
+  assert.strictEqual(tr.positionX, 1280); assert.strictEqual(tr.positionY, 200);
+  assert.strictEqual(o.calls.find(c => c[0]==='SetInputSettings')[1].inputSettings.font.size, 40);
+  o = fakeObs({ failOn: 'GetVideoSettings' });
+  assert.strictEqual(await ensureTextSource(o, base), true);
   // menu parsing
   assert.deepStrictEqual(parseTipMenu('25 = kiss; 50 = twirl\n\n 100=flash '), ['25 = kiss','50 = twirl','100=flash']);
   assert.strictEqual(parseTipMenu(Array.from({length:30},(_, i)=>'a'+i).join(';')).length, 10);
