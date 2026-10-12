@@ -129,6 +129,18 @@
           </button>
         </div>
 
+        <!-- Tip goal — running total toward a goal, shown here and (optionally) on stream -->
+        <div class="promo-bar goal-bar" id="goal-bar">
+          <span class="promo-label">&#127942; GOAL</span>
+          <input id="goal-title" type="text" maxlength="40" autocomplete="off" spellcheck="false" placeholder="Goal name" />
+          <input id="goal-target" type="number" min="1" max="1000000" class="goal-target" title="Goal in tokens" />
+          <div class="goal-track" title="Tokens tipped this show"><div class="goal-fill" id="goal-fill"></div><span class="goal-text" id="goal-text">0 / 1000</span></div>
+          <button id="goal-reset" class="btn btn-ghost" title="Start a new show: set the total back to 0">Reset</button>
+          <button id="goal-toggle" class="promo-toggle" title="Show the goal on your stream">
+            <span class="promo-toggle-dot"></span><span id="goal-toggle-label">OFF</span>
+          </button>
+        </div>
+
         <!-- Toys — tip-activated Lovense / Intiface control -->
         <div class="toy-panel" id="toy-panel">
           <div class="toy-head">

@@ -313,6 +313,36 @@ if ($('promo-input')) {
   loadPromoBar();
 }
 
+// ── Tip goal bar ───────────────────────────────────────────────────────────────
+let goalEnabled = false, goalSaveTimer = null;
+function renderGoal(v) {
+  if (!v || !$('goal-bar')) return;
+  goalEnabled = !!v.enabled;
+  $('goal-fill').style.width = v.percent + '%';
+  $('goal-text').textContent = (v.reached ? 'GOAL REACHED! ' + v.total : v.total + ' / ' + v.target) + (v.top ? '  👑 ' + v.top.user + ' (' + v.top.tokens + ')' : '');
+  $('goal-fill').parentElement.classList.toggle('reached', !!v.reached);
+  $('goal-toggle').classList.toggle('on', goalEnabled);
+  $('goal-toggle-label').textContent = goalEnabled ? 'ON' : 'OFF';
+  const a = document.activeElement;
+  if (a !== $('goal-title')) $('goal-title').value = v.title;
+  if (a !== $('goal-target')) $('goal-target').value = v.target;
+}
+function saveGoal() {
+  window.api.goalSet({ title: $('goal-title').value.trim(), target: $('goal-target').value, enabled: goalEnabled })
+    .then(renderGoal).catch(() => {});
+}
+if ($('goal-bar')) {
+  for (const id of ['goal-title', 'goal-target']) {
+    $(id).addEventListener('input', () => { clearTimeout(goalSaveTimer); goalSaveTimer = setTimeout(saveGoal, 700); });
+  }
+  $('goal-toggle').addEventListener('click', () => { goalEnabled = !goalEnabled; saveGoal(); });
+  $('goal-reset').addEventListener('click', () => {
+    if (confirm('Start a new show? This sets the goal total and top tipper back to 0.')) window.api.goalReset().then(renderGoal).catch(() => {});
+  });
+  window.api.onGoalUpdate(renderGoal);
+  window.api.goalGet().then(renderGoal).catch(() => {});
+}
+
 // ── Platform sidebar (live destination toggles) ───────────────────────────────
 const PLATFORM_META = {
   chaturbate: { label: 'Chaturbate', abbr: 'CB' },

@@ -56,6 +56,7 @@
       "toy-manager.js",
       "events-poller.js",
       "stream-guard.js",
+      "tip-goal.js",
       "friendly-errors.js",
       "cookie-sync.js",
       "logger.js",

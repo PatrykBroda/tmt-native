@@ -683,6 +683,7 @@ function noteTip(platform, user, amount) {
     if (!Number.isFinite(tokens) || tokens < 1) return;
     getToyMan().enqueueTip({ platform, user, tokens });
   } catch (e) { logger.warn('[toys] noteTip failed', { error: e.message }); }
+  try { getTipGoal().addTip(user, amount); } catch (e) { logger.warn('[goal] addTip failed', { error: e.message }); }
 }
 
 // BongaCams: no events API is wired up; best-effort text heuristic on DOM-scraped rows.
@@ -920,6 +921,62 @@ async function ensureOverlaySource() {
   }
 }
 
+// ── Tip goal (dashboard bar + OBS text source "TipGoal", bottom-left) ─────────
+const { createTipGoal } = require('./tip-goal');
+const goalConfigPath = () => path.join(app.getPath('userData'), 'tipgoal.json');
+let tipGoal = null;
+let goalObsTimer = null;
+function getTipGoal() {
+  if (tipGoal) return tipGoal;
+  let saved = {};
+  try { saved = JSON.parse(fs.readFileSync(goalConfigPath(), 'utf8')); } catch {}
+  tipGoal = createTipGoal(saved, (view) => {
+    mainWindow?.webContents.send('desktop:goal-update', view);
+    clearTimeout(goalObsTimer);           // tips can arrive in bursts — coalesce OBS updates
+    goalObsTimer = setTimeout(() => { ensureGoalSource().catch(() => {}); }, 600);
+  });
+  return tipGoal;
+}
+function saveGoalConfig() {
+  try { fs.writeFileSync(goalConfigPath(), JSON.stringify(getTipGoal().getConfig()), 'utf8'); } catch {}
+}
+async function ensureGoalSource() {
+  if (!obsClient) return;
+  const goal = getTipGoal(), cfg = goal.getConfig();
+  try {
+    let inputKinds = [];
+    try { ({ inputKinds } = await obsClient.call('GetInputKindList')); } catch {}
+    const textKind = ['text_gdiplus_v3', 'text_gdiplus_v2', 'text_ft2_source_v2', 'text_ft2_source']
+      .find(k => inputKinds.includes(k));
+    if (!textKind) return;
+    const gdi = textKind.startsWith('text_gdiplus');
+    const { currentProgramSceneName: scene } = await obsClient.call('GetCurrentProgramScene');
+    const { sceneItems } = await obsClient.call('GetSceneItemList', { sceneName: scene });
+    let item = sceneItems.find(it => it.sourceName === 'TipGoal');
+    let sceneItemId = item?.sceneItemId;
+    if (!item) {
+      if (!cfg.enabled) return;           // nothing to hide, don't create clutter
+      ({ sceneItemId } = await obsClient.call('CreateInput', {
+        sceneName: scene, inputName: 'TipGoal', inputKind: textKind,
+        inputSettings: {}, sceneItemEnabled: cfg.enabled,
+      }));
+      await obsClient.call('SetSceneItemTransform', {
+        sceneName: scene, sceneItemId,
+        sceneItemTransform: { alignment: 9, positionX: 48, positionY: 1040 }, // 9 = bottom|left
+      }).catch(() => {});
+    }
+    const font = { face: 'Arial', size: 38, style: 'Bold', flags: 0 };
+    const text = goal.overlayText();
+    const settings = gdi
+      ? { text, font, color: 4294967295, outline: true, outline_color: 4278190080, outline_size: 4 }
+      : { text, font, color1: 4294967295, color2: 4294967295, outline: true, drop_shadow: true };
+    await obsClient.call('SetInputSettings', { inputName: 'TipGoal', overlay: true, inputSettings: settings });
+    await obsClient.call('SetSceneItemEnabled', { sceneName: scene, sceneItemId, sceneItemEnabled: cfg.enabled });
+  } catch (e) {
+    logger.warn('ensureGoalSource failed', { error: e.message });
+  }
+}
+
 // Auto-resume the stream if it drops while the model wants to be live.
 const { createStreamGuard } = require('./stream-guard');
 const streamGuard = createStreamGuard({
@@ -1017,6 +1074,7 @@ async function connectObs(wsPassword) {
     } catch {}
     await ensureCameraSource();
     await ensureOverlaySource();
+    await ensureGoalSource();
     await applyStreamService();
     startViewerCountPolling();
     startEventsPolling();
@@ -1335,6 +1393,7 @@ ipcMain.handle('desktop:go-live', async () => {
   // was ready. Idempotent — no-op when a camera is already in the scene.
   await ensureCameraSource();
   await ensureOverlaySource();
+  await ensureGoalSource();
 
   // Log OBS scene and sources so we can diagnose black-camera issues
   try {
@@ -1896,11 +1955,17 @@ ipcMain.handle('desktop:get-program-frame', async () => {
   }
 });
 
+// Tip goal
+ipcMain.handle('desktop:goal-get', () => getTipGoal().getView());
+ipcMain.handle('desktop:goal-set', (_e, c) => { getTipGoal().configure(c); saveGoalConfig(); return getTipGoal().getView(); });
+ipcMain.handle('desktop:goal-reset', () => { getTipGoal().reset(); return getTipGoal().getView(); });
+
 // Promo text overlay (top-left of stream)
 ipcMain.handle('desktop:get-overlay', () => loadOverlayConfig());
 ipcMain.handle('desktop:set-overlay', async (_e, cfg) => {
   saveOverlayConfig(cfg);
   await ensureOverlaySource();
+  await ensureGoalSource();
   return { ok: true, ...overlayConfig };
 });
 

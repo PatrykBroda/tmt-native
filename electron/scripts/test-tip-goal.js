@@ -1,0 +1,18 @@
+const assert = require('assert');
+const { createTipGoal } = require('../tip-goal');
+let changes = 0;
+const g = createTipGoal({ title: 'Lingerie', target: 100, enabled: true }, () => changes++);
+assert.strictEqual(g.addTip('a', 30), true);
+g.addTip('b', '50'); g.addTip('a', 10);
+for (const bad of [0, -5, 'x', NaN, undefined, 0.4]) assert.strictEqual(g.addTip('z', bad), false);
+let v = g.getView();
+assert.strictEqual(v.total, 90); assert.strictEqual(v.percent, 90); assert.deepStrictEqual(v.top, { user: 'b', tokens: 50 });
+assert.strictEqual(changes, 3);
+assert.match(g.overlayText(), /Lingerie: 90\/100 \(90%\)\nTop tipper: b \(50\)/);
+g.addTip('c', 500);
+v = g.getView(); assert.ok(v.reached); assert.strictEqual(v.percent, 100);
+assert.match(g.overlayText(), /GOAL REACHED/);
+g.configure({ target: 'junk', title: '' }); assert.strictEqual(g.getConfig().target, 100); assert.strictEqual(g.getConfig().title, 'Tip goal');
+g.reset(); assert.strictEqual(g.getView().total, 0); assert.strictEqual(g.getView().top, null);
+assert.strictEqual(createTipGoal({ target: -3 }).getConfig().target, 1000);
+console.log('tip-goal OK');
