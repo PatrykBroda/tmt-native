@@ -2738,10 +2738,11 @@ ipcMain.handle('desktop:force-close', () => { forceCloseWindow = true; mainWindo
 ipcMain.handle('desktop:get-app-version',   () => app.getVersion());
 
 ipcMain.handle('desktop:sc-login-status', async () => {
-  if (!scView) return { loggedIn: false };
+  if (!scView) return { loggedIn: false, known: false };   // view not opened yet: can't tell
   try {
     // If Stripchat redirected to a login/signin page the user is not logged in.
     const url = scView.webContents.getURL();
+    if (!url || url === 'about:blank') return { loggedIn: false, known: false };   // still loading
     return { loggedIn: url.includes('stripchat.com') &&
                        !url.includes('/login') &&
                        !url.includes('/signin') };

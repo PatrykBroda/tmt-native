@@ -45,7 +45,7 @@ const END_SHOW_TEXT = {
 };
 
 // ── Setup checklist: sites, camera, mic, studio → one clear next step ──────────
-const setup = { studio: false, destinations: [], camera: 'checking', mic: 'checking', micTimer: null };
+const setup = { studio: false, destinations: [], camera: 'checking', mic: 'checking', micTimer: null, scLoggedIn: null };
 
 function setupItem(id, state, label) {   // state: ok | warn | bad | wait
   const el = $('si-' + id);
@@ -66,7 +66,7 @@ function renderSetup() {
   setupItem('studio', setup.studio ? 'ok' : 'wait', setup.studio ? 'Studio ready' : 'Studio starting…');
   const anySite = !!(cb || sc);
   setupItem('chaturbate', !cb ? (anySite ? 'off' : 'bad') : cbTips ? 'ok' : 'warn', !cb ? (anySite ? 'Chaturbate not used' : 'Chaturbate not connected') : cbTips ? 'Chaturbate connected' : 'Chaturbate: tips not linked');
-  setupItem('stripchat',  !sc ? (anySite ? 'off' : 'bad') : 'ok', !sc ? (anySite ? 'Stripchat not used' : 'Stripchat not connected') : 'Stripchat connected');
+  setupItem('stripchat',  !sc ? (anySite ? 'off' : 'bad') : setup.scLoggedIn === false ? 'warn' : 'ok', !sc ? (anySite ? 'Stripchat not used' : 'Stripchat not connected') : setup.scLoggedIn === false ? 'Stripchat: not logged in' : 'Stripchat connected');
   setupItem('camera', setup.camera === 'ok' ? 'ok' : setup.camera === 'bad' ? 'bad' : 'wait',
             setup.camera === 'ok' ? 'Camera working' : setup.camera === 'bad' ? 'No camera found' : 'Checking camera…');
   setupItem('mic', setup.mic === 'ok' ? 'ok' : setup.mic === 'bad' ? 'bad' : 'wait',
@@ -78,6 +78,7 @@ function renderSetup() {
   card.classList.remove('hidden');
   if (!dests.length)              { text = 'Step 1: connect the site you stream on'; action = 'Connect my site'; }
   else if (!setup.studio)         { text = 'Starting your studio… this takes about a minute'; state = 'wait'; }
+  else if (sc && setup.scLoggedIn === false) { text = 'Log in to Stripchat so your chat and tips show up'; action = 'Log in to Stripchat'; state = 'warn'; }
   else if (setup.camera === 'bad'){ text = 'We can’t see your camera. Plug it in, then try again'; action = 'Try camera again'; toSettings = false; }
   else if (setup.mic === 'bad')   { text = 'We can’t find your microphone. Plug it in and restart the app'; state = 'bad'; }
   else if (cb && !cbTips)         { text = 'Almost there: link Chaturbate so your tips and chat show up'; action = 'Link tips & chat'; state = 'warn'; }
@@ -93,6 +94,7 @@ function renderSetup() {
 
 async function refreshSetup() {
   try { setup.destinations = (await window.api.getDestinations()).destinations || []; } catch {}
+  try { const r = await window.api.scLoginStatus(); setup.scLoggedIn = r.known === false ? null : !!r.loggedIn; } catch {}
   renderSetup();
 }
 
