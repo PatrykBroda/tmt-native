@@ -1282,3 +1282,137 @@ document.addEventListener('keydown', e => {
     renderPlatformSidebar(destinations, disabledIds);
   }
 })();
+
+// ── Toys panel (tip-activated Lovense / Intiface) ─────────────────────────────
+const toyUI = { settings: null, status: null, saveTimer: null, tick: null, t0: 0 };
+
+function toyPlatformTag(p) { return ({ chaturbate: 'CB', stripchat: 'SC', bongacams: 'BC', test: 'test' })[p] || p; }
+
+function toyNowText(st, remaining) {
+  const p = st.playing;
+  return `▶ ${toyPlatformTag(p.platform)} ${p.user}${p.tokens ? ' ' + p.tokens + 'tk' : ''} · ${Math.round(p.intensity * 100)}% · ${Math.ceil(remaining)}s left` +
+    (st.queued ? ` · ${st.queued} queued` : '');
+}
+
+function renderToyStatus(st) {
+  toyUI.status = st;
+  $('toy-dot').className = 'toy-dot ' + (st.state === 'connected' ? 'connected' : st.state === 'connecting' ? 'connecting' : '');
+  const n = st.devices.length;
+  $('toy-status').textContent =
+    st.state === 'connected'  ? (n ? `Connected · ${n} toy${n === 1 ? '' : 's'}` : 'Connected · no toys yet')
+    : st.state === 'connecting' ? 'Connecting…'
+    : (st.error ? 'Disconnected — ' + st.error : 'Not connected');
+  $('toy-connect').textContent = st.state === 'disconnected' ? 'Connect' : 'Disconnect';
+  const dev = $('toy-devices');
+  dev.classList.toggle('has', n > 0);
+  dev.textContent = n ? st.devices.map(d => d.name + (d.canVibrate ? '' : ' (no vibrate)')).join(' · ')
+    : (st.state === 'connected' ? 'Connected, but no toys found — switch the toy on / pair it in Intiface.' : 'No toys connected.');
+  const now = $('toy-now');
+  clearInterval(toyUI.tick);
+  if (st.playing) {
+    now.classList.add('active');
+    now.textContent = toyNowText(st, st.playing.remaining);
+    toyUI.t0 = Date.now();
+    toyUI.tick = setInterval(() => {   // keep the countdown moving between status pushes
+      const left = Math.max(0, st.playing.remaining - (Date.now() - toyUI.t0) / 1000);
+      now.textContent = toyNowText(st, left);
+    }, 500);
+  } else {
+    now.classList.remove('active');
+    now.textContent = st.queued ? `${st.queued} queued` : 'Idle';
+  }
+}
+
+function renderToyLevels() {
+  const box = $('toy-levels'); box.innerHTML = '';
+  (toyUI.settings.levels || []).forEach((l, i) => {
+    const row = document.createElement('div'); row.className = 'toy-level';
+    row.innerHTML =
+      `<input type="text" class="toy-num" data-k="min" value="${l.min}" /> to ` +
+      `<input type="text" class="toy-num" data-k="max" value="${l.max ?? ''}" placeholder="∞" /> tokens → ` +
+      `<input type="text" class="toy-num" data-k="intensity" value="${Math.round(l.intensity * 100)}" />% for ` +
+      `<input type="text" class="toy-num" data-k="seconds" value="${l.seconds}" />s ` +
+      `<button class="toy-level-x" data-i="${i}" title="Remove">&times;</button>`;
+    box.appendChild(row);
+  });
+}
+
+function collectToySettings() {
+  const s = toyUI.settings;
+  s.backend = $('toy-backend').value;
+  s.intifaceUrl = $('toy-intiface-url').value.trim() || s.intifaceUrl;
+  s.lovenseHost = $('toy-lovense-host').value.trim() || s.lovenseHost;
+  s.lovensePort = Number($('toy-lovense-port').value) || s.lovensePort;
+  s.enabled = $('toy-enabled').checked;
+  s.autoConnect = $('toy-auto').checked;
+  s.bongaTipParsing = $('toy-bonga').checked;
+  s.maxQueue = Number($('toy-maxq').value) || s.maxQueue;
+  s.levels = [...$('toy-levels').children].map(row => {
+    const v = k => row.querySelector(`[data-k="${k}"]`).value.trim();
+    return { min: Number(v('min')), max: v('max') === '' ? null : Number(v('max')),
+             intensity: (Number(v('intensity')) || 0) / 100, seconds: Number(v('seconds')) };
+  });
+  return s;
+}
+
+function saveToys() {
+  clearTimeout(toyUI.saveTimer);
+  toyUI.saveTimer = setTimeout(async () => {
+    try {
+      toyUI.settings = await window.api.toysSetSettings(collectToySettings());
+      $('toy-panel').classList.toggle('lovense', toyUI.settings.backend === 'lovense');
+      const s = $('toy-saved'); s.classList.add('show'); setTimeout(() => s.classList.remove('show'), 1300);
+    } catch {}
+  }, 500);
+}
+
+async function initToys() {
+  if (!$('toy-panel')) return;
+  const { settings, status } = await window.api.toysGet();
+  toyUI.settings = settings;
+  $('toy-backend').value = settings.backend;
+  $('toy-intiface-url').value = settings.intifaceUrl;
+  $('toy-lovense-host').value = settings.lovenseHost;
+  $('toy-lovense-port').value = settings.lovensePort;
+  $('toy-enabled').checked = settings.enabled;
+  $('toy-auto').checked = settings.autoConnect;
+  $('toy-bonga').checked = settings.bongaTipParsing;
+  $('toy-maxq').value = settings.maxQueue;
+  $('toy-panel').classList.toggle('lovense', settings.backend === 'lovense');
+  renderToyLevels();
+  renderToyStatus(status);
+  window.api.onToyStatus(renderToyStatus);
+
+  $('toy-expand').addEventListener('click', () => $('toy-panel').classList.toggle('open'));
+  $('toy-stop').addEventListener('click', () => window.api.toysStop());
+  $('toy-connect').addEventListener('click', async () => {
+    if (toyUI.status.state === 'disconnected') {
+      clearTimeout(toyUI.saveTimer);
+      toyUI.settings = await window.api.toysSetSettings(collectToySettings());
+      window.api.toysConnect();
+    } else window.api.toysDisconnect();
+  });
+  document.querySelectorAll('.toy-test').forEach(b =>
+    b.addEventListener('click', () => window.api.toysTest(Number(b.dataset.i), Number(b.dataset.s))));
+  ['toy-backend', 'toy-intiface-url', 'toy-lovense-host', 'toy-lovense-port', 'toy-enabled', 'toy-auto', 'toy-bonga', 'toy-maxq']
+    .forEach(id => $(id).addEventListener('change', saveToys));
+  $('toy-levels').addEventListener('change', saveToys);
+  $('toy-levels').addEventListener('click', e => {
+    const x = e.target.closest('.toy-level-x'); if (!x) return;
+    toyUI.settings.levels = collectToySettings().levels.filter((_, i) => i !== Number(x.dataset.i));
+    renderToyLevels(); saveToys();
+  });
+  $('toy-add-level').addEventListener('click', () => {
+    const lv = collectToySettings().levels; const last = lv[lv.length - 1];
+    if (last && last.max === null) last.max = last.min + 99;
+    lv.push({ min: last ? (last.max + 1) : 1, max: null, intensity: 1, seconds: 10 });
+    toyUI.settings.levels = lv; renderToyLevels(); saveToys();
+  });
+  $('toy-reset-levels').addEventListener('click', () => {
+    toyUI.settings.levels = [
+      { min: 1, max: 9, intensity: 0.25, seconds: 3 }, { min: 10, max: 49, intensity: 0.5, seconds: 6 },
+      { min: 50, max: 99, intensity: 0.75, seconds: 10 }, { min: 100, max: null, intensity: 1, seconds: 15 }];
+    renderToyLevels(); saveToys();
+  });
+}
+initToys();

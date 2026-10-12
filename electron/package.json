@@ -53,6 +53,7 @@
       "obs-manager.js",
       "chat-manager.js",
       "chat-config.js",
+      "toy-manager.js",
       "cookie-sync.js",
       "logger.js",
       "secrets.js",

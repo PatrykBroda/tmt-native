@@ -128,6 +128,50 @@
             <span class="promo-toggle-dot"></span><span id="promo-toggle-label">OFF</span>
           </button>
         </div>
+
+        <!-- Toys — tip-activated Lovense / Intiface control -->
+        <div class="toy-panel" id="toy-panel">
+          <div class="toy-head">
+            <span class="promo-label">TOYS</span>
+            <span class="toy-dot" id="toy-dot"></span>
+            <span class="toy-status" id="toy-status">Not connected</span>
+            <span class="toy-now" id="toy-now">Idle</span>
+            <button class="toy-stop" id="toy-stop" title="Stop the toy and clear the tip queue">&#9724; STOP</button>
+            <button class="btn btn-icon toy-expand" id="toy-expand" title="Toy settings">&#9662;</button>
+          </div>
+          <div class="toy-body" id="toy-body">
+            <div class="toy-row">
+              <select id="toy-backend">
+                <option value="intiface">Intiface Central (Lovense, Kiiroo, We-Vibe&hellip;)</option>
+                <option value="lovense">Lovense Remote (Game Mode)</option>
+              </select>
+              <input id="toy-intiface-url" type="text" spellcheck="false" placeholder="ws://127.0.0.1:12345" />
+              <span id="toy-lovense-fields" class="toy-lovense-fields">
+                <input id="toy-lovense-host" type="text" spellcheck="false" placeholder="phone IP" />
+                <input id="toy-lovense-port" type="text" spellcheck="false" placeholder="20010" class="toy-num" />
+              </span>
+              <button class="btn btn-ghost" id="toy-connect">Connect</button>
+            </div>
+            <div class="toy-row toy-devices" id="toy-devices">No toys connected.</div>
+            <div class="toy-row">
+              <span class="toy-sub">TEST</span>
+              <button class="btn btn-ghost toy-test" data-i="0.25" data-s="2">Low</button>
+              <button class="btn btn-ghost toy-test" data-i="0.5"  data-s="2">Med</button>
+              <button class="btn btn-ghost toy-test" data-i="1"    data-s="2">High</button>
+              <label class="toy-chk"><input type="checkbox" id="toy-enabled" /> Tips control toy</label>
+              <label class="toy-chk"><input type="checkbox" id="toy-auto" /> Auto-connect</label>
+            </div>
+            <div class="toy-sub toy-sub-title">TIP LEVELS <span class="toy-hint">tokens &rarr; intensity &amp; seconds (blank max = no limit)</span></div>
+            <div id="toy-levels" class="toy-levels"></div>
+            <div class="toy-row">
+              <button class="btn btn-ghost" id="toy-add-level">+ Level</button>
+              <button class="btn btn-ghost" id="toy-reset-levels">Defaults</button>
+              <label class="toy-chk">Max queued tips <input id="toy-maxq" type="text" class="toy-num" /></label>
+              <label class="toy-chk" title="BongaCams has no tip feed; this guesses from chat text and can be spoofed by viewers"><input type="checkbox" id="toy-bonga" /> BongaCams chat-text tips (unverified)</label>
+              <span id="toy-saved" class="promo-saved">Saved &#10003;</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- Platform toggles sidebar -->

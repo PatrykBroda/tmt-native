@@ -54,5 +54,13 @@ contextBridge.exposeInMainWorld('api', {
   onMuteState:    (cb) => ipcRenderer.on('desktop:mute-state',      (_e, d)    => cb(d)),
   onAuthError:    (cb) => ipcRenderer.on('desktop:auth-error',      (_e, d)    => cb(d)),
   onChatStatus:     (cb) => ipcRenderer.on('desktop:chat-status',     (_e, d) => cb(d)),
+  toysGet:         ()    => ipcRenderer.invoke('desktop:toys-get'),
+  toysSetSettings: (s)   => ipcRenderer.invoke('desktop:toys-set-settings', s),
+  toysConnect:     ()    => ipcRenderer.invoke('desktop:toys-connect'),
+  toysDisconnect:  ()    => ipcRenderer.invoke('desktop:toys-disconnect'),
+  toysStop:        ()    => ipcRenderer.invoke('desktop:toys-stop'),
+  toysTest:        (intensity, seconds) => ipcRenderer.invoke('desktop:toys-test', { intensity, seconds }),
+  onToyStatus:     (cb)  => ipcRenderer.on('desktop:toy-status', (_e, d) => cb(d)),
+  testInject:      (kind, payload) => ipcRenderer.invoke('desktop:test-inject', { kind, payload }),
   onStartupStatus:  (cb) => ipcRenderer.on('startup-status',          (_e, d) => cb(d)),
 });

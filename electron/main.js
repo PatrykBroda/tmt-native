@@ -9,6 +9,7 @@ const ChatManager = require('./chat-manager');
 const chatConfig  = require('./chat-config');
 const cookieSync  = require('./cookie-sync');
 const logger      = require('./logger');
+const { ToyManager, parseTipText } = require('./toy-manager');
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const API_BASE           = process.env.API_BASE || 'https://admin.agencytmt.com';
@@ -406,6 +407,7 @@ function handleChaturbateEvent(ev) {
         user,
         msg:  `tipped ${ev.object?.tokens || ev.object?.tip?.tokens || '?'} tokens`,
       });
+      noteTip('chaturbate', user, ev.object?.tokens || ev.object?.tip?.tokens);
       break;
     }
     case 'broadcastStart':
@@ -612,6 +614,7 @@ async function startStripchatChat() {
               type: 'tip', platform: 'stripchat', user,
               msg: `tipped ${amount} tokens`,
             });
+            noteTip('stripchat', user, amount);
             break;
           }
           case 'follow':
@@ -652,6 +655,64 @@ function stopStripchatChat() {
   if (stripchatPingTimer)  { clearInterval(stripchatPingTimer); stripchatPingTimer = null; }
   stripchatWs?.terminate();
   stripchatWs = null;
+}
+
+// ── Toys (tip-activated; see toy-manager.js) ──────────────────────────────────
+const toysConfigPath = () => path.join(app.getPath('userData'), 'toys.json');
+let toyMan = null;
+
+function getToyMan() {
+  if (toyMan) return toyMan;
+  let saved = {};
+  try { saved = JSON.parse(fs.readFileSync(toysConfigPath(), 'utf8')); } catch {}
+  toyMan = new ToyManager({ logger, settings: saved });
+  toyMan.on('status', st => mainWindow?.webContents.send('desktop:toy-status', st));
+  return toyMan;
+}
+function saveToySettings() {
+  try { fs.writeFileSync(toysConfigPath(), JSON.stringify(getToyMan().getSettings()), 'utf8'); } catch {}
+}
+
+// Every platform's tip handler funnels through here → one shared queue.
+function noteTip(platform, user, amount) {
+  try {
+    const tokens = Number(amount);
+    if (!Number.isFinite(tokens) || tokens < 1) return;
+    getToyMan().enqueueTip({ platform, user, tokens });
+  } catch (e) { logger.warn('[toys] noteTip failed', { error: e.message }); }
+}
+
+// BongaCams: no events API is wired up; best-effort text heuristic on DOM-scraped rows.
+// Opt-in only — a viewer could type "tipped 500 tokens" in public chat to spoof it.
+function handleBongaDomEvent(event) {
+  if (event?.platform !== 'bongacams') return;
+  try {
+    if (!getToyMan().getSettings().bongaTipParsing) return;
+    const tokens = parseTipText(event.text);
+    if (tokens) noteTip('bongacams', event.username || 'anon', tokens);
+  } catch {}
+}
+
+ipcMain.handle('desktop:toys-get', () => ({ settings: getToyMan().getSettings(), status: getToyMan().getStatus() }));
+ipcMain.handle('desktop:toys-set-settings', (_e, s) => {
+  const out = getToyMan().setSettings(s || {});
+  saveToySettings();
+  return out;
+});
+ipcMain.handle('desktop:toys-connect',    async () => getToyMan().connect());
+ipcMain.handle('desktop:toys-disconnect', () => getToyMan().disconnect());
+ipcMain.handle('desktop:toys-stop',       () => getToyMan().stopAll('user'));
+ipcMain.handle('desktop:toys-test',       (_e, { intensity, seconds }) => getToyMan().testVibrate(intensity, seconds));
+
+// Test-only: push a synthetic raw platform event through the real parsing code.
+// Disabled unless the app is launched with TMT_TEST_HOOKS=1.
+if (process.env.TMT_TEST_HOOKS === '1') {
+  ipcMain.handle('desktop:test-inject', (_e, { kind, payload }) => {
+    if (kind === 'chaturbate') handleChaturbateEvent(payload);                 // payload = CB events-API event object
+    else if (kind === 'stripchat') handleScWsFrame(payload);                   // payload = raw socket.io frame string
+    else if (kind === 'bongacams') handleBongaDomEvent(payload);               // payload = chat-manager DOM event
+    return true;
+  });
 }
 
 // ── Chat status ───────────────────────────────────────────────────────────────
@@ -1629,6 +1690,7 @@ function handleScWsFrame(raw) {
       case 'broadcast:tip': {
         const amount = data?.amount || data?.tokens || data?.tip?.amount || data?.tokensAmount || '?';
         mainWindow?.webContents.send('desktop:chat-message', { type: 'tip', platform: 'stripchat', user, msg: `tipped ${amount} tokens` });
+        noteTip('stripchat', user, amount);
         break;
       }
       case 'follow':
@@ -2637,6 +2699,7 @@ function createWindow() {
     mainWindow,
     onEvent: (event) => {
       scLog(`[${event.platform}] ${event.username}: ${(event.text || '').slice(0, 80)}`);
+      handleBongaDomEvent(event);
       mainWindow?.webContents.send('desktop:chat-message', {
         type:     event.type || 'chat',
         platform: event.platform,
@@ -2709,6 +2772,7 @@ app.whenReady().then(async () => {
   }
 
   createWindow();
+  try { if (getToyMan().getSettings().autoConnect) getToyMan().connect(); } catch {}
   // Silent update check: run 5 s after launch so it doesn't race with startup
   setTimeout(() => checkForUpdates(true), 5000);
   app.on('activate', () => { if (!mainWindow) createWindow(); });
@@ -2733,5 +2797,6 @@ app.on('before-quit', () => {
   stopStripchatChat();
   stopAutoFixer();
   chatManager?.stop();
+  try { toyMan?.shutdown(); } catch {}
   obsMan.killObs();
 });
