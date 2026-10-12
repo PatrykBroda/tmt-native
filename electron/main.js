@@ -10,6 +10,7 @@ const chatConfig  = require('./chat-config');
 const cookieSync  = require('./cookie-sync');
 const logger      = require('./logger');
 const { ToyManager, parseTipText } = require('./toy-manager');
+const { createEventsPoller } = require('./events-poller');
 
 // ── Safety nets ───────────────────────────────────────────────────────────────
 // A second copy of the app would kill the first one's OBS (killStaleObs) and drop
@@ -353,39 +354,30 @@ function ensureFirewallRule() {
 }
 
 // ── Chaturbate Events API polling ─────────────────────────────────────────────
-let eventsActive          = false;
-let eventsAbortController = null;
+let eventsPoller          = null;
 let viewerPollInterval    = null;
 
 async function startEventsPolling() {
-  if (eventsActive) return;
+  if (eventsPoller?.isActive()) return;
   const dest = streamDestinations.find(
     d => d.eventsToken && d.username && d.name.toLowerCase() === 'chaturbate'
   );
   if (!dest) return;
 
-  eventsActive = true;
   console.log('[events] starting for', dest.username);
   mainWindow?.webContents.send('desktop:chat-status', buildChatStatus());
-  let url = `https://eventsapi.chaturbate.com/events/${encodeURIComponent(dest.username)}/${encodeURIComponent(dest.eventsToken)}/?timeout=20`;
-
-  while (eventsActive && storedToken) {
-    try {
-      eventsAbortController = new AbortController();
-      const res = await fetch(url, {
-        signal:  eventsAbortController.signal,
-        headers: { Accept: 'application/json' },
-      });
-      if (res.status === 401 || res.status === 403) { eventsActive = false; break; }
-      if (!res.ok) { await new Promise(r => setTimeout(r, 5000)); continue; }
-      const data = await res.json();
-      for (const ev of (data.events || [])) handleChaturbateEvent(ev);
-      url = data.next_url || url;
-    } catch (err) {
-      if (err.name !== 'AbortError') await new Promise(r => setTimeout(r, 3000));
-    }
-  }
-  eventsActive = false;
+  eventsPoller = createEventsPoller({
+    baseUrl:   `https://eventsapi.chaturbate.com/events/${encodeURIComponent(dest.username)}/${encodeURIComponent(dest.eventsToken)}/?timeout=20`,
+    fetchFn:   fetch,
+    sleep:     ms => new Promise(r => setTimeout(r, ms)),
+    isAllowed: () => !!storedToken,
+    onEvent:   handleChaturbateEvent,
+    notify:    msg => {
+      logger.warn('[events] ' + msg);
+      mainWindow?.webContents.send('desktop:chat-message', { type: 'system', platform: 'chaturbate', user: '', msg });
+    },
+  });
+  await eventsPoller.run();
 }
 
 function handleChaturbateEvent(ev) {
@@ -438,9 +430,8 @@ function handleChaturbateEvent(ev) {
 }
 
 function stopEventsPolling() {
-  eventsActive = false;
-  eventsAbortController?.abort();
-  eventsAbortController = null;
+  eventsPoller?.stop();
+  eventsPoller = null;
 }
 
 async function startViewerCountPolling() {
