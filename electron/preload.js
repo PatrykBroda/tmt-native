@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('api', {
   getProgramFrame: ()           => ipcRenderer.invoke('desktop:get-program-frame'),
   getOverlay:      ()           => ipcRenderer.invoke('desktop:get-overlay'),
   setOverlay:      (cfg)        => ipcRenderer.invoke('desktop:set-overlay', cfg),
+  tipMenuGet:      ()           => ipcRenderer.invoke('desktop:tipmenu-get'),
+  tipMenuSet:      (cfg)        => ipcRenderer.invoke('desktop:tipmenu-set', cfg),
   setEventsToken:  (id, token)    => ipcRenderer.invoke('desktop:set-events-token', { id, token }),
   setUsername:     (id, username) => ipcRenderer.invoke('desktop:set-username',     { id, username }),
   toggleMute:          ()           => ipcRenderer.invoke('desktop:toggle-mute'),

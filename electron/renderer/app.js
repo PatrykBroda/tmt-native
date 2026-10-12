@@ -313,6 +313,18 @@ if ($('promo-input')) {
   loadPromoBar();
 }
 
+// ── Tip menu bar ───────────────────────────────────────────────────────────────
+if ($('tipmenu-bar')) {
+  let tmOn = false, tmTimer = null;
+  const tmPaint = () => { $('tipmenu-toggle').classList.toggle('on', tmOn); $('tipmenu-toggle-label').textContent = tmOn ? 'ON' : 'OFF'; };
+  const tmSave = () => window.api.tipMenuSet({ text: $('tipmenu-input').value, enabled: tmOn }).then(() => {
+    const s = $('tipmenu-saved'); s.classList.add('show'); setTimeout(() => s.classList.remove('show'), 1300);
+  }).catch(() => {});
+  $('tipmenu-input').addEventListener('input', () => { clearTimeout(tmTimer); tmTimer = setTimeout(tmSave, 700); });
+  $('tipmenu-toggle').addEventListener('click', () => { tmOn = !tmOn; tmPaint(); tmSave(); });
+  window.api.tipMenuGet().then(c => { $('tipmenu-input').value = c?.text || ''; tmOn = !!c?.enabled; tmPaint(); }).catch(() => {});
+}
+
 // ── Tip goal bar ───────────────────────────────────────────────────────────────
 let goalEnabled = false, goalSaveTimer = null;
 function renderGoal(v) {

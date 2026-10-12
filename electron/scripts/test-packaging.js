@@ -4,7 +4,7 @@ const fs = require('fs'), path = require('path'), assert = require('assert');
 const root = path.join(__dirname, '..');
 const files = require(path.join(root, 'package.json')).build.files;
 const missing = [];
-for (const f of ['main.js', 'obs-manager.js', 'chat-manager.js', 'toy-manager.js', 'stream-guard.js', 'events-poller.js']) {
+for (const f of ['main.js', 'obs-manager.js', 'chat-manager.js', 'toy-manager.js', 'stream-guard.js', 'events-poller.js', 'obs-text-source.js']) {
   const src = fs.readFileSync(path.join(root, f), 'utf8');
   for (const m of src.matchAll(/require\('\.\/([\w-]+)(?:\.js)?'\)/g)) {
     if (m[1] === 'secrets') continue;

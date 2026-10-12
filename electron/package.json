@@ -57,6 +57,7 @@
       "events-poller.js",
       "stream-guard.js",
       "tip-goal.js",
+      "obs-text-source.js",
       "friendly-errors.js",
       "cookie-sync.js",
       "logger.js",

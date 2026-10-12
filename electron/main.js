@@ -881,48 +881,13 @@ function saveOverlayConfig(cfg) {
 // used to promote socials on stream. Cross-platform: GDI+ text on Windows,
 // FreeType2 on macOS/Linux. Idempotent — safe to call on every connect/change.
 async function ensureOverlaySource() {
-  if (!obsClient) return;
   const cfg = loadOverlayConfig();
-  try {
-    let inputKinds = [];
-    try { ({ inputKinds } = await obsClient.call('GetInputKindList')); } catch {}
-    const textKind = ['text_gdiplus_v3', 'text_gdiplus_v2', 'text_ft2_source_v2', 'text_ft2_source']
-      .find(k => inputKinds.includes(k));
-    if (!textKind) { logger.warn('No OBS text source kind available', { inputKinds }); return; }
-    const gdi = textKind.startsWith('text_gdiplus');
-
-    const { currentProgramSceneName: scene } = await obsClient.call('GetCurrentProgramScene');
-    const { sceneItems } = await obsClient.call('GetSceneItemList', { sceneName: scene });
-    let item = sceneItems.find(it => it.sourceName === 'Promo');
-    let sceneItemId = item?.sceneItemId;
-
-    if (!item) {
-      ({ sceneItemId } = await obsClient.call('CreateInput', {
-        sceneName: scene, inputName: 'Promo', inputKind: textKind,
-        inputSettings: {}, sceneItemEnabled: cfg.enabled,
-      }));
-      // Anchor to the top-left corner with a small margin.
-      await obsClient.call('SetSceneItemTransform', {
-        sceneName: scene, sceneItemId,
-        sceneItemTransform: { alignment: 5, positionX: 48, positionY: 40 }, // 5 = top|left
-      }).catch(() => {});
-    }
-
-    // White bold text with a dark outline so it's readable over any camera image.
-    const font = { face: 'Arial', size: 42, style: 'Bold', flags: 0 };
-    const settings = gdi
-      ? { text: cfg.text, font, color: 4294967295, outline: true, outline_color: 4278190080, outline_size: 4 }
-      : { text: cfg.text, font, color1: 4294967295, color2: 4294967295, outline: true, drop_shadow: true };
-    await obsClient.call('SetInputSettings', { inputName: 'Promo', overlay: true, inputSettings: settings });
-    await obsClient.call('SetSceneItemEnabled', { sceneName: scene, sceneItemId, sceneItemEnabled: cfg.enabled });
-    logger.info('OBS promo overlay applied', { enabled: cfg.enabled, kind: textKind, chars: cfg.text.length });
-  } catch (e) {
-    logger.warn('ensureOverlaySource failed', { error: e.message });
-  }
+  await ensureTextSource(obsClient, { name: 'Promo', text: cfg.text, enabled: cfg.enabled, alignment: 5, x: 48, y: 40, size: 42 }, logger); // 5 = top|left
 }
 
 // ── Tip goal (dashboard bar + OBS text source "TipGoal", bottom-left) ─────────
 const { createTipGoal } = require('./tip-goal');
+const { ensureTextSource, parseTipMenu, tipMenuText } = require('./obs-text-source');
 const goalConfigPath = () => path.join(app.getPath('userData'), 'tipgoal.json');
 let tipGoal = null;
 let goalObsTimer = null;
@@ -941,40 +906,22 @@ function saveGoalConfig() {
   try { fs.writeFileSync(goalConfigPath(), JSON.stringify(getTipGoal().getConfig()), 'utf8'); } catch {}
 }
 async function ensureGoalSource() {
-  if (!obsClient) return;
   const goal = getTipGoal(), cfg = goal.getConfig();
-  try {
-    let inputKinds = [];
-    try { ({ inputKinds } = await obsClient.call('GetInputKindList')); } catch {}
-    const textKind = ['text_gdiplus_v3', 'text_gdiplus_v2', 'text_ft2_source_v2', 'text_ft2_source']
-      .find(k => inputKinds.includes(k));
-    if (!textKind) return;
-    const gdi = textKind.startsWith('text_gdiplus');
-    const { currentProgramSceneName: scene } = await obsClient.call('GetCurrentProgramScene');
-    const { sceneItems } = await obsClient.call('GetSceneItemList', { sceneName: scene });
-    let item = sceneItems.find(it => it.sourceName === 'TipGoal');
-    let sceneItemId = item?.sceneItemId;
-    if (!item) {
-      if (!cfg.enabled) return;           // nothing to hide, don't create clutter
-      ({ sceneItemId } = await obsClient.call('CreateInput', {
-        sceneName: scene, inputName: 'TipGoal', inputKind: textKind,
-        inputSettings: {}, sceneItemEnabled: cfg.enabled,
-      }));
-      await obsClient.call('SetSceneItemTransform', {
-        sceneName: scene, sceneItemId,
-        sceneItemTransform: { alignment: 9, positionX: 48, positionY: 1040 }, // 9 = bottom|left
-      }).catch(() => {});
-    }
-    const font = { face: 'Arial', size: 38, style: 'Bold', flags: 0 };
-    const text = goal.overlayText();
-    const settings = gdi
-      ? { text, font, color: 4294967295, outline: true, outline_color: 4278190080, outline_size: 4 }
-      : { text, font, color1: 4294967295, color2: 4294967295, outline: true, drop_shadow: true };
-    await obsClient.call('SetInputSettings', { inputName: 'TipGoal', overlay: true, inputSettings: settings });
-    await obsClient.call('SetSceneItemEnabled', { sceneName: scene, sceneItemId, sceneItemEnabled: cfg.enabled });
-  } catch (e) {
-    logger.warn('ensureGoalSource failed', { error: e.message });
-  }
+  await ensureTextSource(obsClient, { name: 'TipGoal', text: goal.overlayText(), enabled: cfg.enabled, alignment: 9, x: 48, y: 1040, size: 38, createIfMissing: false }, logger); // 9 = bottom|left
+}
+
+// ── Tip menu (OBS text source "TipMenu", top-right) ───────────────────────────
+const tipMenuPath = () => path.join(app.getPath('userData'), 'tipmenu.json');
+let tipMenuCfg = null;
+function loadTipMenu() {
+  if (tipMenuCfg) return tipMenuCfg;
+  try { tipMenuCfg = JSON.parse(fs.readFileSync(tipMenuPath(), 'utf8')); } catch { tipMenuCfg = {}; }
+  tipMenuCfg = { text: String(tipMenuCfg.text || '').slice(0, 800), enabled: !!tipMenuCfg.enabled };
+  return tipMenuCfg;
+}
+async function ensureTipMenuSource() {
+  const cfg = loadTipMenu();
+  await ensureTextSource(obsClient, { name: 'TipMenu', text: tipMenuText(parseTipMenu(cfg.text)), enabled: cfg.enabled, alignment: 6, x: 1872, y: 40, size: 34, createIfMissing: false }, logger); // 6 = top|right
 }
 
 // Auto-resume the stream if it drops while the model wants to be live.
@@ -1075,6 +1022,7 @@ async function connectObs(wsPassword) {
     await ensureCameraSource();
     await ensureOverlaySource();
     await ensureGoalSource();
+    await ensureTipMenuSource();
     await applyStreamService();
     startViewerCountPolling();
     startEventsPolling();
@@ -1394,6 +1342,7 @@ ipcMain.handle('desktop:go-live', async () => {
   await ensureCameraSource();
   await ensureOverlaySource();
   await ensureGoalSource();
+  await ensureTipMenuSource();
 
   // Log OBS scene and sources so we can diagnose black-camera issues
   try {
@@ -1960,12 +1909,22 @@ ipcMain.handle('desktop:goal-get', () => getTipGoal().getView());
 ipcMain.handle('desktop:goal-set', (_e, c) => { getTipGoal().configure(c); saveGoalConfig(); return getTipGoal().getView(); });
 ipcMain.handle('desktop:goal-reset', () => { getTipGoal().reset(); return getTipGoal().getView(); });
 
+// Tip menu
+ipcMain.handle('desktop:tipmenu-get', () => loadTipMenu());
+ipcMain.handle('desktop:tipmenu-set', async (_e, c) => {
+  tipMenuCfg = { text: String(c?.text || '').slice(0, 800), enabled: !!c?.enabled };
+  try { fs.writeFileSync(tipMenuPath(), JSON.stringify(tipMenuCfg), 'utf8'); } catch {}
+  await ensureTipMenuSource();
+  return tipMenuCfg;
+});
+
 // Promo text overlay (top-left of stream)
 ipcMain.handle('desktop:get-overlay', () => loadOverlayConfig());
 ipcMain.handle('desktop:set-overlay', async (_e, cfg) => {
   saveOverlayConfig(cfg);
   await ensureOverlaySource();
   await ensureGoalSource();
+  await ensureTipMenuSource();
   return { ok: true, ...overlayConfig };
 });
 
