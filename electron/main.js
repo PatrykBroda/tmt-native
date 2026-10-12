@@ -928,6 +928,19 @@ async function ensureOverlaySource() {
   }
 }
 
+// Auto-resume the stream if it drops while the model wants to be live.
+const { createStreamGuard } = require('./stream-guard');
+const streamGuard = createStreamGuard({
+  start: async () => {
+    if (!obsClient) throw new Error('OBS not connected');
+    const st = await obsClient.call('GetStreamStatus');
+    if (st.outputActive) return;
+    await obsClient.call('StartStream');
+  },
+  notify: (m) => mainWindow?.webContents.send('desktop:stream-error', m),
+  log: (m, d) => logger.info('[stream-guard] ' + m, d),
+});
+
 // If OBS crashes (or is closed) while the app is running, bring it back automatically.
 const obsRespawnOk = obsMan.createRespawnLimiter();
 obsMan.onUnexpectedExit((code) => {
@@ -938,7 +951,7 @@ obsMan.onUnexpectedExit((code) => {
     mainWindow?.webContents.send('desktop:stream-error', 'The video engine keeps stopping. Please close and reopen the app.');
     return;
   }
-  mainWindow?.webContents.send('desktop:stream-error', 'The video engine stopped — restarting it now. If you were live, press Go Live again in a few seconds.');
+  mainWindow?.webContents.send('desktop:stream-error', 'The video engine stopped — restarting it now. If you were live, your stream will resume automatically.');
   setTimeout(() => {
     if (!storedToken) return;
     try { obsMan.spawnObs(); logger.info('OBS respawned'); } catch (e) { logger.error('OBS respawn failed', { error: e.message }); }
@@ -976,7 +989,14 @@ async function connectObs(wsPassword) {
   obsClient.on('StreamStateChanged', ({ outputActive, outputState }) => {
     if (outputState === 'OBS_WEBSOCKET_OUTPUT_ERROR') {
       logger.error('OBS stream error', { outputState });
-      mainWindow?.webContents.send('desktop:stream-error', 'Stream failed — check your network or stream settings.');
+      if (streamGuard.isWantLive()) streamGuard.onStreamStopped('error');
+      else mainWindow?.webContents.send('desktop:stream-error', 'Stream failed — check your network or stream settings.');
+    } else if (outputState === 'OBS_WEBSOCKET_OUTPUT_STOPPED') {
+      logger.info('OBS stream state changed', { outputState, outputActive });
+      streamGuard.onStreamStopped('stopped');
+    } else if (outputState === 'OBS_WEBSOCKET_OUTPUT_STARTED') {
+      logger.info('OBS stream state changed', { outputState, outputActive });
+      streamGuard.onStreamStarted();
     } else {
       logger.info('OBS stream state changed', { outputState, outputActive });
     }
@@ -1036,6 +1056,7 @@ async function connectObs(wsPassword) {
     obsConnected = true;
     if (obsReconnectTimer) { clearTimeout(obsReconnectTimer); obsReconnectTimer = null; }
     mainWindow?.webContents.send('desktop:obs-status', { connected: true });
+    streamGuard.onObsReconnected();
   } catch (err) {
     obsClient = null;
     mainWindow?.webContents.send('desktop:obs-status', { connected: false, status: 'Starting OBS…' });
@@ -1260,6 +1281,7 @@ ipcMain.handle('desktop:start-stream', async () => {
   if (streamPlatforms.length === 0) return { ok: false, error: 'No stream destinations configured for your account.' };
   try {
     await obsClient.call('StartStream');
+    streamGuard.setWantLive(true);
     lastTotalBytes = 0;
     lastPollTime   = Date.now();
     logger.info('Stream started', { platforms: streamPlatforms });
@@ -1271,6 +1293,7 @@ ipcMain.handle('desktop:start-stream', async () => {
 });
 
 ipcMain.handle('desktop:stop-stream', async () => {
+  streamGuard.setWantLive(false);
   if (!obsClient) return { ok: false, error: 'OBS not connected' };
   try {
     await obsClient.call('StopStream');
@@ -1349,6 +1372,7 @@ ipcMain.handle('desktop:go-live', async () => {
   logger.info('Go live: OBS stream starting', { platforms: activeDests.map(d => d.name) });
   try {
     await obsClient.call('StartStream');
+    streamGuard.setWantLive(true);
     lastTotalBytes = 0;
     lastPollTime   = Date.now();
     logger.info('Go live: OBS stream started');
@@ -1616,6 +1640,7 @@ ipcMain.handle('desktop:go-offline', async () => {
   }
 
   // ── OBS ──────────────────────────────────────────────────────────────
+  streamGuard.setWantLive(false);
   if (!obsClient) { logger.warn('Go offline: OBS not connected'); return { ok: false, stage: 'obs', error: 'OBS not connected' }; }
   try {
     await obsClient.call('StopStream');
