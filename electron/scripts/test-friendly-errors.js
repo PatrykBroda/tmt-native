@@ -1,0 +1,11 @@
+const assert = require('assert');
+const { friendlyStreamError: f } = require('../friendly-errors');
+assert(/not ready yet/.test(f(new Error('Not connected'))));
+assert(/not ready yet/.test(f({ message: 'Socket not identified' })));
+assert(/already live/.test(f(new Error('Request StartStream returned code 500. Message: output already active'))));
+assert(/internet/.test(f({ code: 'ENOTFOUND', message: 'getaddrinfo ENOTFOUND x' })));
+assert(/too long/.test(f({ name: 'AbortError', message: 'The operation timed out' })));
+assert(/stream keys/.test(f(new Error('Output error: failed to connect'))));
+assert(/try again/.test(f(undefined)));
+assert(/Something went wrong \(weird/.test(f('weird thing')));
+console.log('friendly-errors OK');

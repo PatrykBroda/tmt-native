@@ -103,6 +103,7 @@ $('go-live-btn').addEventListener('click', async () => {
   const btn = $('go-live-btn');
   btn.disabled = true;
   let result;
+  try {
   if (isStreaming) {
     result = await window.api.goOffline();
     stopProgramPreview();
@@ -119,6 +120,12 @@ $('go-live-btn').addEventListener('click', async () => {
     result = await window.api.goLive();
     if (result.ok) startProgramPreview();
     else { setCameraPlaceholder('&#9679;&nbsp; NO CAMERA'); initCamera(); }
+  }
+  } catch (err) {
+    // IPC itself failed — never leave the button stuck disabled with no explanation
+    console.error('[go-live]', err);
+    result = { ok: false, error: 'Something went wrong talking to the app. Please try again.' };
+    setCameraPlaceholder('&#9679;&nbsp; NO CAMERA'); initCamera();
   }
   if (!result.ok) {
     const prefix = result.stage === 'stripchat' ? '[Stripchat] ' : '';

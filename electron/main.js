@@ -11,6 +11,7 @@ const cookieSync  = require('./cookie-sync');
 const logger      = require('./logger');
 const { ToyManager, parseTipText } = require('./toy-manager');
 const { createEventsPoller } = require('./events-poller');
+const { friendlyStreamError } = require('./friendly-errors');
 
 // ── Safety nets ───────────────────────────────────────────────────────────────
 // A second copy of the app would kill the first one's OBS (killStaleObs) and drop
@@ -1279,29 +1280,29 @@ ipcMain.handle('desktop:start-stream', async () => {
     return { ok: true };
   } catch (err) {
     logger.error('Stream start failed', { error: err.message });
-    return { ok: false, error: err.message };
+    return { ok: false, error: friendlyStreamError(err) };
   }
 });
 
 ipcMain.handle('desktop:stop-stream', async () => {
   streamGuard.setWantLive(false);
-  if (!obsClient) return { ok: false, error: 'OBS not connected' };
+  if (!obsClient) return { ok: false, error: friendlyStreamError('Not connected') };
   try {
     await obsClient.call('StopStream');
     logger.info('Stream stopped');
     return { ok: true };
   } catch (err) {
     logger.error('Stream stop failed', { error: err.message });
-    return { ok: false, error: err.message };
+    return { ok: false, error: friendlyStreamError(err) };
   }
 });
 
 ipcMain.handle('desktop:go-live', async () => {
   // ── OBS ──────────────────────────────────────────────────────────────
-  if (!obsClient) return { ok: false, stage: 'obs', error: 'OBS not connected' };
+  if (!obsClient) return { ok: false, stage: 'obs', error: friendlyStreamError('Not connected') };
   const activeDests = getActiveDestinations();
   if (activeDests.length === 0)
-    return { ok: false, stage: 'obs', error: 'All platforms are disabled' };
+    return { ok: false, stage: 'obs', error: 'All your platforms are switched off. Turn at least one on in the left panel, then press Go Live.' };
 
   // Rewrite obs-multi-rtmp.json with only active destinations, then reload
   // the OBS profile so the plugin picks up the new config before stream start.
@@ -1381,7 +1382,7 @@ ipcMain.handle('desktop:go-live', async () => {
     }, 5000);
   } catch (err) {
     logger.error('Go live: OBS start failed', { error: err.message });
-    return { ok: false, stage: 'obs', error: err.message };
+    return { ok: false, stage: 'obs', error: friendlyStreamError(err) };
   }
 
   // ── Stripchat click (only when Stripchat is an active destination) ────
@@ -1632,14 +1633,14 @@ ipcMain.handle('desktop:go-offline', async () => {
 
   // ── OBS ──────────────────────────────────────────────────────────────
   streamGuard.setWantLive(false);
-  if (!obsClient) { logger.warn('Go offline: OBS not connected'); return { ok: false, stage: 'obs', error: 'OBS not connected' }; }
+  if (!obsClient) { logger.warn('Go offline: OBS not connected'); return { ok: false, stage: 'obs', error: friendlyStreamError('Not connected') }; }
   try {
     await obsClient.call('StopStream');
     logger.info('Go offline: OBS stream stopped');
     return { ok: true };
   } catch (err) {
     logger.error('Go offline: OBS stop failed', { error: err.message });
-    return { ok: false, stage: 'obs', error: err.message };
+    return { ok: false, stage: 'obs', error: friendlyStreamError(err) };
   }
 });
 
@@ -1822,7 +1823,7 @@ ipcMain.handle('desktop:remove-destination', async (_e, { id }) => {
 });
 
 ipcMain.handle('desktop:toggle-mute', async () => {
-  if (!obsClient) return { ok: false, muted: false, error: 'OBS not connected' };
+  if (!obsClient) return { ok: false, muted: false, error: friendlyStreamError('Not connected') };
   try {
     if (!cachedMicName) {
       const specials = await obsClient.call('GetSpecialInputs');
