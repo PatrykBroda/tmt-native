@@ -332,6 +332,7 @@ function renderGoal(v) {
   goalEnabled = !!v.enabled;
   $('goal-fill').style.width = v.percent + '%';
   $('goal-text').textContent = (v.reached ? 'GOAL REACHED! ' + v.total : v.total + ' / ' + v.target) + (v.top ? '  👑 ' + v.top.user + ' (' + v.top.tokens + ')' : '');
+  $('goal-text').title = $('goal-text').textContent;
   $('goal-fill').parentElement.classList.toggle('reached', !!v.reached);
   $('goal-toggle').classList.toggle('on', goalEnabled);
   $('goal-toggle-label').textContent = goalEnabled ? 'ON' : 'OFF';

@@ -1672,5 +1672,5 @@ input::placeholder { color: var(--border-hi); }
 .goal-track { position: relative; flex: 1; min-width: 190px; height: 26px; background: var(--surface3); border: 1px solid var(--border-mid); border-radius: 999px; overflow: hidden; }
 .goal-fill { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, #f59e0b, #fbbf24); transition: width .4s; }
 .goal-track.reached .goal-fill { background: linear-gradient(90deg, #10b981, #34d399); }
-.goal-text { position: absolute; inset: 0; white-space: nowrap; font-size: 10px;  display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.7); }
+.goal-text { position: absolute; inset: 0; padding: 0 12px; box-sizing: border-box; display: block; text-align: center; line-height: 24px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 11px; font-weight: 800; color: #fff; text-shadow: 0 1px 2px rgba(0,0,0,.7); }
 .goal-top { font-size: 11px; color: var(--muted); white-space: nowrap; max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
